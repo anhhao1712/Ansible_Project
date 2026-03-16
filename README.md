@@ -1,5 +1,6 @@
 # Ansible_Project
 
+```
 ANSIBLE_IAC_PROJECT/
 ├── inventories/
 │   └── hosts.ini ................... [Người A] (P1) - Bản đồ địa chỉ các máy server.
@@ -26,3 +27,4 @@ ANSIBLE_IAC_PROJECT/
 │   └── secrets.yml ................. [Người A] (P2) - Két sắt mã hóa mật khẩu sudo.
 ├── ansible.cfg ..................... [Người A] (P1) - Cài đặt "luật chơi" cho Ansible.
 └── README.md ....................... [Người A] (P4) - Sách hướng dẫn sử dụng đồ án.
+```

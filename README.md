@@ -2,8 +2,8 @@
 ## 🗺️ Luồng hoạt động hệ thống
 
 ```
-                    ┌────────────────────────────────────┐
-                    │              CONTROL NODE          │
+┌────────────────────────────────────┐
+                    │            CONTROL NODE            │
                     │                                    │
                     │  ┌───────────┐  ┌───────────┐      │
                     │  │ansible.cfg│  │ hosts.ini │      │
@@ -26,11 +26,12 @@
               ┌────────────────────────┼────────────────────────┐
               ▼                        ▼                        ▼
   ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
-  │    docker/      │      │ nginx_service/  │      │   security/     │
+  │     docker/     │      │ nginx_service/  │      │   security/     │
   │─────────────────│      │─────────────────│      │─────────────────│
   │tasks/main.yml   │      │tasks/main.yml   │      │tasks/main.yml   │
-  │tasks/install.yml│      │templates/       │      │UFW, SSH         │
-  │                 │      │vars/main.yml    │      │hardening        │
+  │tasks/install.yml│      │handlers/main.yml│      │UFW, SSH         │
+  │                 │      │templates/       │      │hardening        │
+  │                 │      │vars/main.yml    │      │                 │
   │Cài Docker Engine│      │Deploy web Nginx │      │Cấu hình bảo mật │
   └─────────────────┘      └─────────────────┘      └─────────────────┘
               │                        │                        │
@@ -75,6 +76,8 @@ ANSIBLE_IAC_PROJECT/
 │   │       ├── main.yml ............ [Người A] (P2) - Điều hướng cài đặt Docker.
 │   │       └── install.yml ......... [Người A] (P2) - Các lệnh cài Engine & SDK Python.
 │   ├── nginx_service/
+│   │   ├── handlers/
+│   │   │   └── main.yml ............ [Người B] (P3) - Lệnh khởi động lại/reload Nginx khi cần.
 │   │   ├── tasks/
 │   │   │   └── main.yml ............ [Người B] (P3) - Lệnh kéo Image & chạy Container Nginx.
 │   │   ├── templates/

@@ -1,0 +1,32 @@
+---
+- name: Pull Nginx Docker image
+  community.docker.docker_image:
+    name: "{{ nginx_image }}"
+    source: pull
+
+- name: Copy custom index.html to managed node
+  ansible.builtin.template:
+    src: index.html.j2
+    dest: /tmp/index.html
+    mode: '0644'
+
+- name: Run Nginx container
+  community.docker.docker_container:
+    name: "{{ nginx_container_name }}"
+    image: "{{ nginx_image }}"
+    state: started
+    restart_policy: always
+    ports:
+      - "{{ nginx_host_port }}:{{ nginx_container_port }}"
+    volumes:
+      - /tmp/index.html:/usr/share/nginx/html/index.html:ro
+  notify: restart nginx container
+
+- name: Verify container is running
+  community.docker.docker_container_info:
+    name: "{{ nginx_container_name }}"
+  register: container_info
+
+- name: Print container status
+  ansible.builtin.debug:
+    msg: "Container {{ nginx_container_name }} is {{ container_info.container.State.Status }}"

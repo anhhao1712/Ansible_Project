@@ -1,0 +1,6 @@
+nginx_container_name: "webserver"
+nginx_image: "nginx:latest"
+nginx_host_port: 80
+nginx_container_port: 80
+nginx_page_title: "Ansible IAC Project"
+nginx_team_member: "Node {{ inventory_hostname }}"

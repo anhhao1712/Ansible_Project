@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ nginx_page_title }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: #1a1a2e;
+            color: #eee;
+        }
+        .card {
+            text-align: center;
+            background: #16213e;
+            padding: 40px 60px;
+            border-radius: 12px;
+            border: 1px solid #0f3460;
+        }
+        h1 { color: #e94560; }
+        p  { color: #a8b2d8; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>{{ nginx_page_title }}</h1>
+        <p>Deployed by Ansible</p>
+        <p>Server: <strong>{{ nginx_team_member }}</strong></p>
+        <p>Container: <strong>{{ nginx_container_name }}</strong></p>
+    </div>
+</body>
+</html>

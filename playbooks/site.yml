@@ -8,4 +8,11 @@
     - name: Test firewall log level
       debug:
         var: firewall_log_level
+- name: Deploy full stack
+  hosts: all
+  become: true
 
+  roles:
+    - docker
+    - nginx_service
+    - security

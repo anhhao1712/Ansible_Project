@@ -1,0 +1,4 @@
+mysql_image:          "mysql:8.0"
+mysql_container_name: "mysql_db"
+mysql_host_port:      3306
+mysql_container_port: 3306

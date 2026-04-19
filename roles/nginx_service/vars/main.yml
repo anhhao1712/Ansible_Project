@@ -1,0 +1,4 @@
+nginx_container_name: "webserver"
+nginx_image:          "nginx:alpine"
+nginx_host_port:      80
+nginx_container_port: 80

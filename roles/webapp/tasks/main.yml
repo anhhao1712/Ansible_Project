@@ -1,0 +1,78 @@
+---
+- name: Tao thu muc chua source code Flask
+  file:
+    path: "{{ webapp_src_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Copy app.py len server
+  copy:
+    src:  app.py
+    dest: "{{ webapp_src_dir }}/app.py"
+    mode: '0644'
+
+- name: Copy requirements.txt len server
+  copy:
+    src:  requirements.txt
+    dest: "{{ webapp_src_dir }}/requirements.txt"
+    mode: '0644'
+
+- name: Copy Dockerfile len server
+  copy:
+    src:  Dockerfile
+    dest: "{{ webapp_src_dir }}/Dockerfile"
+    mode: '0644'
+
+- name: Cho MySQL san sang truoc khi chay Flask
+  wait_for:
+    host:    "{{ mysql_host }}"
+    port:    "{{ mysql_port }}"
+    timeout: 60
+    msg:     "Cho MySQL tren node2 khoi dong..."
+
+- name: Build Docker image Flask app
+  community.docker.docker_image:
+    name:       "{{ webapp_image }}"
+    build:
+      path: "{{ webapp_src_dir }}"
+    source:     build
+    force_source: true
+
+- name: Stop container cu neu dang chay
+  community.docker.docker_container:
+    name:  "{{ webapp_container_name }}"
+    state: absent
+  ignore_errors: true
+
+- name: Run Flask app container
+  community.docker.docker_container:
+    name:           "{{ webapp_container_name }}"
+    image:          "{{ webapp_image }}"
+    state:          started
+    restart_policy: always
+    ports:
+      - "{{ webapp_host_port }}:{{ webapp_container_port }}"
+    env:
+      DB_HOST:     "{{ mysql_host }}"
+      DB_PORT:     "{{ mysql_port | string }}"
+      DB_NAME:     "{{ mysql_database }}"
+      DB_USER:     "{{ mysql_user }}"
+      DB_PASS:     "{{ mysql_password }}"
+      SERVER_NAME: "{{ inventory_hostname }}"
+      SERVER_IP:   "{{ ansible_host }}"
+
+- name: Cho Flask app khoi dong
+  wait_for:
+    host:    "127.0.0.1"
+    port:    "{{ webapp_host_port }}"
+    timeout: 30
+    delay:   3
+
+- name: Kiem tra Flask app status
+  community.docker.docker_container_info:
+    name: "{{ webapp_container_name }}"
+  register: flask_info
+
+- name: In trang thai Flask app
+  debug:
+    msg: "Flask [{{ webapp_container_name }}]: {{ flask_info.container.State.Status }} | port {{ webapp_host_port }}"

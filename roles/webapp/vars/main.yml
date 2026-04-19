@@ -1,0 +1,5 @@
+webapp_container_name: "flask_app"
+webapp_host_port:      5000
+webapp_container_port: 5000
+webapp_image:          "ansible_flask_app"
+webapp_src_dir:        "/opt/flask_app"

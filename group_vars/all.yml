@@ -1,0 +1,27 @@
+network_zones:
+  wan:
+    interface: eth0
+    proto: dhcp
+  lan:
+    interface: eth1
+    ipaddr: 192.168.80.1
+    network: 192.168.80.0/24
+    netmask: 255.255.255.0
+  guest:
+    interface: eth2
+    ipaddr: 172.16.10.1
+    network: 172.16.10.0/24
+    netmask: 255.255.255.0
+
+firewall_log_level: info
+
+# -- MySQL --------------------------------------------------
+mysql_host:          "192.168.80.140"
+mysql_port:          3306
+mysql_database:      "ansible_iac_db"
+mysql_user:          "ansible_user"
+mysql_root_password: "{{ vault_mysql_root_password }}"
+mysql_password:      "{{ vault_mysql_password }}"
+
+# -- Firewall -----------------------------------------------
+web_node_ip: "192.168.80.139"

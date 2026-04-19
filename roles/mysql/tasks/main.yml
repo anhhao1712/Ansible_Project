@@ -1,0 +1,80 @@
+---
+- name: Tao thu muc data MySQL (persistent storage)
+  file:
+    path: /opt/mysql_data
+    state: directory
+    mode: '0755'
+
+- name: Run MySQL container
+  community.docker.docker_container:
+    name:           "{{ mysql_container_name }}"
+    image:          "{{ mysql_image }}"
+    state:          started
+    restart_policy: always
+    ports:
+      - "{{ mysql_host_port }}:{{ mysql_container_port }}"
+    volumes:
+      - /opt/mysql_data:/var/lib/mysql
+    env:
+      MYSQL_ROOT_PASSWORD: "{{ mysql_root_password }}"
+      MYSQL_DATABASE:      "{{ mysql_database }}"
+      MYSQL_USER:          "{{ mysql_user }}"
+      MYSQL_PASSWORD:      "{{ mysql_password }}"
+
+- name: Cho MySQL khoi dong xong (timeout 60s)
+  wait_for:
+    host:    "127.0.0.1"
+    port:    "{{ mysql_host_port }}"
+    timeout: 60
+    delay:   10
+
+# -- Seed data -----------------------------------------------
+- name: Copy file seed data len DB server
+  copy:
+    src:  seed_data.sql
+    dest: /tmp/seed_data.sql
+
+- name: Chay seed data vao database (dung root)
+  shell: |
+    docker exec -i {{ mysql_container_name }} mysql \
+      -uroot \
+      -p'{{ mysql_root_password }}' \
+      {{ mysql_database }} < /tmp/seed_data.sql
+  ignore_errors: true
+
+- name: Query bang servers tu DB
+  shell: |
+    docker exec {{ mysql_container_name }} mysql \
+      -uroot \
+      -p'{{ mysql_root_password }}' \
+      {{ mysql_database }} \
+      -e "SELECT id, hostname, ip, role, status FROM servers;"
+  register: query_servers
+  ignore_errors: true
+
+- name: In ket qua bang servers
+  debug:
+    msg: "{{ query_servers.stdout_lines }}"
+
+- name: Query deploy logs tu DB
+  shell: |
+    docker exec {{ mysql_container_name }} mysql \
+      -uroot \
+      -p'{{ mysql_root_password }}' \
+      {{ mysql_database }} \
+      -e "SELECT server, task, result FROM deploy_logs;"
+  register: query_logs
+  ignore_errors: true
+
+- name: In ket qua deploy logs
+  debug:
+    msg: "{{ query_logs.stdout_lines }}"
+
+- name: Kiem tra MySQL container status
+  community.docker.docker_container_info:
+    name: "{{ mysql_container_name }}"
+  register: mysql_info
+
+- name: In trang thai MySQL
+  debug:
+    msg: "MySQL [{{ mysql_container_name }}]: {{ mysql_info.container.State.Status }} | DB: {{ mysql_database }}"

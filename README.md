@@ -76,6 +76,13 @@ Ansible_Project/
 │
 ├── docs/
 │   ├── Setup.md
+│   ├── file1.md
+│   ├── file2.md
+│   ├── file3.md
+│   └── file4.md
+│
+├── group_vars/
+│   └── all.yml
 │
 ├── inventories/
 │   ├── hosts.ini
@@ -133,7 +140,15 @@ Ansible_Project/
 │   └── webapp/
 │       ├── files/
 │       │   ├── app.py
-│       │   ├── Docker
+│       │   ├── Dockerfile
+│       │   └── requirements.txt
+│       ├── tasks/
+│       │   └── main.yml        # [SỬA] thêm tags
+│       └── vars/
+│           └── main.yml
+│
+└── vault/
+    └── secrets.yml
 ```
 
 

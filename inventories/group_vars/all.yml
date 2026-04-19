@@ -20,12 +20,9 @@ mysql_host:          "192.168.80.140"
 mysql_port:          3306
 mysql_database:      "ansible_iac_db"
 mysql_user:          "ansible_user"
-mysql_root_password: "{{ vault_mysql_root_password }}"
-mysql_password:      "{{ vault_mysql_password }}"
+mysql_root_password: "Root@1234"
+mysql_password: "Wp@1234"
+
 
 # -- Firewall -----------------------------------------------
 web_node_ip: "192.168.80.139"
-
-# Vault
-mysql_root_password: "Root@1234"
-mysql_password: "Wp@1234"

@@ -1,3 +1,0 @@
----
-- name: Execute Docker installation
-  include_tasks: install.yml

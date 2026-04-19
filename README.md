@@ -2,67 +2,8 @@
 ## 🗺️ Luồng hoạt động hệ thống
 
 ```
-                    ┌────────────────────────────────────┐
-                    │            CONTROL NODE            │
-                    │                                    │
-                    │  ┌───────────┐  ┌───────────┐      │
-                    │  │ansible.cfg│  │ hosts.ini │      │
-                    │  │cấu hình   │  │danh sách  │      │
-                    │  │toàn cục   │  │IP máy     │      │
-                    │  └───────────┘  └───────────┘      │
-                    │  ┌───────────┐  ┌───────────┐      │
-                    │  │secrets.yml│  │group_vars/│      │
-                    │  │vault - mật│  │biến dùng  │      │
-                    │  │khẩu       │  │chung      │      │
-                    │  └───────────┘  └───────────┘      │
-                    └──────────────────┬─────────────────┘
-                                       │ ansible-playbook
-                                       ▼
-                          ┌────────────────────────┐
-                          │   playbooks/site.yml   │
-                          │  điều phối các roles   │
-                          └────────────┬───────────┘
-                                       │ import_role
-              ┌────────────────────────┼────────────────────────┐
-              ▼                        ▼                        ▼
-  ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
-  │     docker/     │      │ nginx_service/  │      │   security/     │
-  │─────────────────│      │─────────────────│      │─────────────────│
-  │tasks/main.yml   │      │tasks/main.yml   │      │tasks/main.yml   │
-  │tasks/install.yml│      │handlers/main.yml│      │UFW, SSH         │
-  │                 │      │templates/       │      │hardening        │
-  │                 │      │vars/main.yml    │      │                 │
-  │Cài Docker Engine│      │Deploy web Nginx │      │Cấu hình bảo mật │
-  └─────────────────┘      └─────────────────┘      └─────────────────┘
-              │                        │                        │
-              └────────────────────────┼────────────────────────┘
-                                       │ SSH (port 22)
-                         ┌─────────────┴─────────────┐
-                         ▼                           ▼
-              ┌─────────────────┐         ┌─────────────────┐
-              │     Node 1      │         │     Node 2      │
-              │─────────────────│         │─────────────────│
-              │ Ubuntu          │         │ Ubuntu          │
-              │ OpenSSH Server  │         │ OpenSSH Server  │
-              │ Python 3        │         │ Python 3        │
-              └─────────────────┘         └─────────────────┘
-                         │                           │
-                         └─────────────┬─────────────┘
-                                       │ kết quả / changed
-                                       ▼
-                          ┌────────────────────────┐
-                          │  ansible all -m ping   │
-                          │  → SUCCESS / pong      │
-                          └────────────────────────┘
-
+          
 ```
-
-
-
-
-
-
-
 
 ```
 Ansible_Project/

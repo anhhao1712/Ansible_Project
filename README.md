@@ -65,34 +65,75 @@
 
 
 ```
-ANSIBLE_IAC_PROJECT/
+Ansible_Project/
+├── .github/
+│   └── workflows/
+│       └── deploy.yml          # [MỚI] CI/CD GitHub Actions
+│
+├── ansible.cfg
+├── requirements.yml            # [MỚI] Ansible Galaxy dependencies
+├── README.md
+│
+├── docs/
+│   ├── Setup.md
+│
 ├── inventories/
-│   └── hosts.ini ................... [Người A] (P1) - Bản đồ địa chỉ các máy server.
+│   ├── hosts.ini
+│   ├── dynamic_inventory.py    # [MỚI] Dynamic Inventory script
+│   ├── dynamic_inventory.yml   # [MỚI] Inventory plugin config
+│   └── group_vars/
+│       └── all.yml
+│
 ├── playbooks/
-│   └── site.yml .................... [Người C] (P4) - Nút nguồn tổng, bấm là chạy cả dự án.
+│   ├── site.yml                # [SỬA] thêm serial, tags
+│   ├── backup.yml              # [MỚI] Backup playbook
+│   ├── rollback.yml            # [MỚI] Rollback playbook
+│   └── healthcheck.yml         # [MỚI] Health Check playbook
+│
 ├── roles/
+│   ├── backup/                 # [MỚI] Backup & Rollback role
+│   │   ├── tasks/
+│   │   │   └── main.yml
+│   │   └── vars/
+│   │       └── main.yml
+│   │
+│   ├── healthcheck/            # [MỚI] Health Check role
+│   │   ├── tasks/
+│   │   │   └── main.yml
+│   │   └── vars/
+│   │       └── main.yml
+│   │
 │   ├── docker/
 │   │   └── tasks/
-│   │       ├── main.yml ............ [Người A] (P2) - Điều hướng cài đặt Docker.
-│   │       └── install.yml ......... [Người A] (P2) - Các lệnh cài Engine & SDK Python.
+│   │       ├── install.yml     # [SỬA] thêm tags
+│   │       └── main.yml
+│   │
+│   ├── mysql/
+│   │   ├── files/
+│   │   │   └── seed_data.sql
+│   │   ├── tasks/
+│   │   │   └── main.yml        # [SỬA] thêm tags
+│   │   └── vars/
+│   │       └── main.yml
+│   │
 │   ├── nginx_service/
 │   │   ├── handlers/
-│   │   │   └── main.yml ............ [Người B] (P3) - Lệnh khởi động lại/reload Nginx khi cần.
+│   │   │   └── main.yml
 │   │   ├── tasks/
-│   │   │   └── main.yml ............ [Người B] (P3) - Lệnh kéo Image & chạy Container Nginx.
+│   │   │   └── main.yml        # [SỬA] thêm tags
 │   │   ├── templates/
-│   │   │   └── index.html.j2 ....... [Người B] (P3) - Trang web hiển thị (có biến động).
+│   │   │   └── nginx.conf.j2
 │   │   └── vars/
-│   │       └── main.yml ............ [Người B] (P3) - Biến riêng cho Nginx (tên container, port).
-│   └── security/
-│       └── tasks/
-│           └── main.yml ............ [Người C] (P3) - Cấu hình "tấm khiên" Firewall UFW.
-├── group_vars/
-│   └── all.yml ..................... [Người C] (P2) - Kho chứa biến chung cho toàn dự án.
-├── vault/
-│   └── secrets.yml ................. [Người A] (P2) - Két sắt mã hóa mật khẩu sudo.
-├── ansible.cfg ..................... [Người A] (P1) - Cài đặt "luật chơi" cho Ansible.
-└── README.md ....................... [Người A] (P4) - Sách hướng dẫn sử dụng đồ án.
+│   │       └── main.yml
+│   │
+│   ├── security/
+│   │   └── tasks/
+│   │       └── main.yml
+│   │
+│   └── webapp/
+│       ├── files/
+│       │   ├── app.py
+│       │   ├── Docker
 ```
 
 

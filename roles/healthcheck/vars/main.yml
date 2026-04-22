@@ -1,0 +1,4 @@
+---
+healthcheck_url: "http://{{ ansible_host }}"
+healthcheck_timeout: 10
+healthcheck_expected_status: 200

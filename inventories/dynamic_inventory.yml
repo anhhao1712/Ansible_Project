@@ -1,0 +1,3 @@
+---
+plugin: script
+script: dynamic_inventory.py

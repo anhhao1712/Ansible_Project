@@ -1,0 +1,36 @@
+---
+# Play 1: Test bien group_vars
+- name: Test global variables
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Test network zones
+      debug:
+        var: network_zones
+    - name: Test firewall log level
+      debug:
+        var: firewall_log_level
+
+# Play 2: Deploy MySQL len node2
+- name: Deploy MySQL Database Server (node2)
+  hosts: db
+  become: true
+  vars_files:
+    - ../vault/secrets.yml
+  roles:
+    - docker
+    - mysql
+    - security
+
+# Play 3: Deploy Flask + Nginx len node1
+- name: Deploy Flask App + Nginx (node1)
+  hosts: web
+  become: true
+  vars_files:
+    - ../vault/secrets.yml
+  roles:
+    - docker
+    - webapp
+    - nginx_service
+    - security
+

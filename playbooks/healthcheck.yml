@@ -1,0 +1,9 @@
+---
+- name: Health Check tat ca node
+  hosts: web
+  become: true
+  vars_files:
+    - ../vault/secrets.yml
+  roles:
+    - healthcheck
+

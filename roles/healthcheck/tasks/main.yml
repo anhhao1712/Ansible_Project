@@ -1,0 +1,26 @@
+---
+- name: Kiem tra Nginx container dang chay
+  community.docker.docker_container_info:
+    name: webserver
+  register: nginx_status
+  tags: [healthcheck]
+
+- name: In trang thai Nginx container
+  ansible.builtin.debug:
+    msg: "Nginx [webserver]: {{ nginx_status.container.State.Status }}"
+  tags: [healthcheck]
+
+- name: Kiem tra web co response HTTP 200 khong
+  ansible.builtin.uri:
+    url: "{{ healthcheck_url }}"
+    method: GET
+    status_code: 200
+    timeout: "{{ healthcheck_timeout }}"
+  register: http_result
+  tags: [healthcheck]
+
+- name: In ket qua HTTP check
+  ansible.builtin.debug:
+    msg: "HTTP Check {{ healthcheck_url }}: {{ http_result.status }}"
+  tags: [healthcheck]
+

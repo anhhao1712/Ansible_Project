@@ -3,6 +3,7 @@
 - name: Test global variables
   hosts: all
   gather_facts: false
+  tags: [always]
   tasks:
     - name: Test network zones
       debug:
@@ -15,21 +16,25 @@
 - name: Deploy MySQL Database Server (node2)
   hosts: db
   become: true
+  serial: 1                        # [SUA] Trien khai tung host mot, tranh downtime
   vars_files:
     - ../vault/secrets.yml
   roles:
-    - docker
-    - mysql
-    - security
+    - { role: docker,   tags: [docker] }
+    - { role: mysql,    tags: [mysql] }
+    - { role: security, tags: [security] }
+  tags: [db, deploy]
 
 # Play 3: Deploy Flask + Nginx len node1
 - name: Deploy Flask App + Nginx (node1)
   hosts: web
   become: true
+  serial: 1                        # [SUA] Trien khai tung host mot, tranh downtime
   vars_files:
     - ../vault/secrets.yml
   roles:
-    - docker
-    - webapp
-    - nginx_service
-    - security
+    - { role: docker,        tags: [docker] }
+    - { role: webapp,        tags: [webapp] }
+    - { role: nginx_service, tags: [nginx] }
+    - { role: security,      tags: [security] }
+  tags: [web, deploy]

@@ -4,26 +4,28 @@
     name:         ufw
     state:        present
     update_cache: true
+  tags: [security, security_firewall]
 
 - name: Allow OpenSSH
   ufw:
     rule: allow
     name: OpenSSH
+  tags: [security, security_firewall]
 
-# Demo tinh nang Loop: thay 3 task rieng le bang 1 task vong lap
+# Demo tinh nang Loop
 - name: Allow cac port web (Loop)
   ufw:
     rule:  allow
     port:  "{{ item.port }}"
     proto: "{{ item.proto }}"
   loop:
-    - { port: "80",  proto: tcp }
-    - { port: "443", proto: tcp }
+    - { port: "80",   proto: tcp }
+    - { port: "443",  proto: tcp }
     - { port: "8080", proto: tcp }
-  # Demo tinh nang When: chi chay tren web node
   when: inventory_hostname in groups['web']
+  tags: [security, security_firewall]
 
-# Chi mo port 3306 tren DB node, chi cho web node ket noi
+# Chi mo port 3306 tren DB node
 - name: Allow MySQL port 3306 tu web node (When)
   ufw:
     rule:    allow
@@ -31,8 +33,10 @@
     proto:   tcp
     from_ip: "{{ web_node_ip }}"
   when: inventory_hostname in groups['db']
+  tags: [security, security_firewall]
 
 - name: Enable UFW
   ufw:
     state:  enabled
     policy: deny
+  tags: [security, security_firewall]

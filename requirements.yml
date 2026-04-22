@@ -1,0 +1,30 @@
+---
+# ================================================================
+# FILE: requirements.yml
+# Mo ta: Khai bao cac Ansible Galaxy collection can thiet cho project
+# Cai dat: ansible-galaxy collection install -r requirements.yml
+# ================================================================
+
+collections:
+  # Docker modules: community.docker.docker_container, docker_image, ...
+  - name: community.docker
+    version: ">=3.4.0"
+
+  # General utilities: community.general.archive, etc.
+  - name: community.general
+    version: ">=7.0.0"
+
+  # MySQL modules (neu can dung mysql_db, mysql_user thay cho shell)
+  - name: community.mysql
+    version: ">=3.7.0"
+
+  # Crypto / SSL support
+  - name: community.crypto
+    version: ">=2.15.0"
+
+roles: []
+# Vi project su dung role noi bo (roles/ directory),
+# khong can pull role tu Galaxy.
+# Them vao day neu can role ngoai, vi du:
+# - name: geerlingguy.docker
+#   version: "6.1.0"

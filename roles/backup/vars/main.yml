@@ -1,0 +1,19 @@
+# --- Thu muc backup ---
+backup_base_dir:    "/opt/backups"
+backup_mysql_dir:   "{{ backup_base_dir }}/mysql"
+backup_webapp_dir:  "{{ backup_base_dir }}/webapp"
+
+# --- Ket noi MySQL ---
+# (su dung bien tu group_vars/all.yml va vault/secrets.yml)
+
+# --- So phien ban backup giu lai ---
+backup_keep_count:  5
+
+# --- Ten file backup (co timestamp) ---
+backup_timestamp:   "{{ ansible_date_time.date }}_{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}"
+backup_mysql_file:  "{{ backup_mysql_dir }}/mysql_{{ backup_timestamp }}.sql.gz"
+backup_webapp_file: "{{ backup_webapp_dir }}/webapp_{{ backup_timestamp }}.tar.gz"
+
+# --- Thu muc rollback (file backup moi nhat) ---
+rollback_mysql_file:  "{{ backup_mysql_dir }}/latest.sql.gz"
+rollback_webapp_file: "{{ backup_webapp_dir }}/latest.tar.gz"

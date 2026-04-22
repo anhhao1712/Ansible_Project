@@ -2,6 +2,7 @@
 - name: Update apt cache
   apt:
     update_cache: true
+  tags: [docker, docker_install]
 
 - name: Install required system packages
   apt:
@@ -13,26 +14,39 @@
       - python3-pip
       - virtualenv
     state: present
+  tags: [docker, docker_install]
 
 - name: Add Docker GPG apt Key
   apt_key:
     url: https://download.docker.com/linux/ubuntu/gpg
     state: present
+  tags: [docker, docker_install]
 
 - name: Add Docker Repository
   apt_repository:
     repo: "deb https://download.docker.com/linux/ubuntu {{ ansible_lsb.codename }} stable"
     state: present
+  tags: [docker, docker_install]
 
 - name: Install Docker Engine
   apt:
     name: docker-ce
     state: present
   when: ansible_os_family == "Debian"
+  tags: [docker, docker_install]
+
+- name: Upgrade urllib3 truoc khi cai docker SDK
+  shell: pip3 install "urllib3>=1.26.0" --upgrade
+  ignore_errors: true
+  tags: [docker, docker_install]
 
 - name: Install Docker SDK for Python
-  pip:
-    name:
-      - requests==2.28.2
-      - docker==6.1.3
-    state: present
+  shell: pip3 install requests==2.28.2 docker==6.1.3 packaging
+  tags: [docker, docker_install]
+
+- name: Them user vao group docker
+  user:
+    name: "{{ ansible_user }}"
+    groups: docker
+    append: true
+  tags: [docker, docker_install]

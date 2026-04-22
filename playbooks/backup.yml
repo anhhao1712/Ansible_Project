@@ -1,0 +1,24 @@
+---
+# ================================================================
+# PLAYBOOK: backup.yml
+# Mo ta : Backup MySQL va webapp truoc khi deploy
+# Chay  : ansible-playbook playbooks/backup.yml
+#         ansible-playbook playbooks/backup.yml --tags backup_mysql
+#         ansible-playbook playbooks/backup.yml --tags backup_webapp
+# ================================================================
+
+- name: Backup MySQL Database (node2)
+  hosts: db
+  become: true
+  vars_files:
+    - ../vault/secrets.yml
+  roles:
+    - role: backup
+      tags: [backup, backup_mysql]
+
+- name: Backup Webapp Source Code (node1)
+  hosts: web
+  become: true
+  roles:
+    - role: backup
+      tags: [backup, backup_webapp]

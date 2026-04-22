@@ -1,0 +1,25 @@
+---
+# ================================================================
+# PLAYBOOK: healthcheck.yml
+# Mo ta : Kiem tra trang thai toan bo he thong sau deploy
+# Chay  : ansible-playbook playbooks/healthcheck.yml
+#         ansible-playbook playbooks/healthcheck.yml --tags healthcheck_http
+# ================================================================
+
+- name: Health Check DB Node (node2)
+  hosts: db
+  become: true
+  vars_files:
+    - ../vault/secrets.yml
+  roles:
+    - role: healthcheck
+      tags: [healthcheck]
+
+- name: Health Check Web Node (node1)
+  hosts: web
+  become: true
+  vars_files:
+    - ../vault/secrets.yml
+  roles:
+    - role: healthcheck
+      tags: [healthcheck]

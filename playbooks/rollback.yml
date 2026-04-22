@@ -1,0 +1,109 @@
+---
+# ================================================================
+# PLAYBOOK: rollback.yml
+# Mo ta : Khoi phuc MySQL va webapp tu ban backup moi nhat
+# Chay  : ansible-playbook playbooks/rollback.yml
+#         ansible-playbook playbooks/rollback.yml --tags rollback_mysql
+#         ansible-playbook playbooks/rollback.yml --tags rollback_webapp
+# ================================================================
+
+# --- Rollback MySQL ---
+- name: Rollback MySQL Database (node2)
+  hosts: db
+  become: true
+  vars_files:
+    - ../vault/secrets.yml
+  tasks:
+    - name: Kiem tra file backup MySQL ton tai
+      stat:
+        path: "{{ rollback_mysql_file }}"
+      register: mysql_bk_stat
+      vars:
+        rollback_mysql_file: "/opt/backups/mysql/latest.sql.gz"
+      tags: [rollback, rollback_mysql]
+
+    - name: Dung neu khong co backup
+      fail:
+        msg: "Khong tim thay file backup MySQL tai {{ rollback_mysql_file }}. Rollback huy bo!"
+      when: not mysql_bk_stat.stat.exists
+      vars:
+        rollback_mysql_file: "/opt/backups/mysql/latest.sql.gz"
+      tags: [rollback, rollback_mysql]
+
+    - name: Restore MySQL tu backup (gzip)
+      shell: |
+        gunzip -c /opt/backups/mysql/latest.sql.gz | \
+        docker exec -i {{ mysql_container_name }} \
+          mysql -uroot -p'{{ mysql_root_password }}' {{ mysql_database }}
+      args:
+        executable: /bin/bash
+      tags: [rollback, rollback_mysql]
+
+    - name: Xac nhan rollback MySQL thanh cong
+      debug:
+        msg: "[ROLLBACK] MySQL da duoc khoi phuc thanh cong tu /opt/backups/mysql/latest.sql.gz"
+      tags: [rollback, rollback_mysql]
+
+# --- Rollback Webapp ---
+- name: Rollback Webapp Source Code (node1)
+  hosts: web
+  become: true
+  tasks:
+    - name: Kiem tra file backup webapp ton tai
+      stat:
+        path: "/opt/backups/webapp/latest.tar.gz"
+      register: webapp_bk_stat
+      tags: [rollback, rollback_webapp]
+
+    - name: Dung neu khong co backup
+      fail:
+        msg: "Khong tim thay file backup webapp. Rollback huy bo!"
+      when: not webapp_bk_stat.stat.exists
+      tags: [rollback, rollback_webapp]
+
+    - name: Stop Flask container truoc khi rollback
+      community.docker.docker_container:
+        name:  "{{ webapp_container_name }}"
+        state: absent
+      ignore_errors: true
+      tags: [rollback, rollback_webapp]
+
+    - name: Giai nen webapp backup ve thu muc goc
+      unarchive:
+        src:        "/opt/backups/webapp/latest.tar.gz"
+        dest:       "/"
+        remote_src: true
+      tags: [rollback, rollback_webapp]
+
+    - name: Khoi dong lai Flask container sau rollback
+      community.docker.docker_container:
+        name:           "{{ webapp_container_name }}"
+        image:          "{{ webapp_image }}"
+        state:          started
+        restart_policy: always
+        ports:
+          - "{{ webapp_host_port }}:{{ webapp_container_port }}"
+        env:
+          DB_HOST:     "{{ mysql_host }}"
+          DB_PORT:     "{{ mysql_port | string }}"
+          DB_NAME:     "{{ mysql_database }}"
+          DB_USER:     "{{ mysql_user }}"
+          DB_PASS:     "{{ mysql_password }}"
+          SERVER_NAME: "{{ inventory_hostname }}"
+          SERVER_IP:   "{{ ansible_host }}"
+      tags: [rollback, rollback_webapp]
+
+    - name: Xac nhan rollback webapp thanh cong
+      debug:
+        msg: "[ROLLBACK] Webapp da duoc khoi phuc thanh cong tu /opt/backups/webapp/latest.tar.gz"
+      tags: [rollback, rollback_webapp]
+
+# --- Health check sau rollback ---
+- name: Health Check sau rollback
+  hosts: all
+  become: true
+  vars_files:
+    - ../vault/secrets.yml
+  roles:
+    - role: healthcheck
+      tags: [rollback, healthcheck]

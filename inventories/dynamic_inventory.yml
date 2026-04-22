@@ -1,0 +1,6 @@
+# ================================================================
+# FILE: inventories/dynamic_inventory.yml
+# Mo ta: Cau hinh Ansible inventory plugin (yaml/ini plugin)
+# Dung: ansible-playbook site.yml -i inventories/dynamic_inventory.yml
+# ================================================================
+plugin: ansible.builtin.yaml

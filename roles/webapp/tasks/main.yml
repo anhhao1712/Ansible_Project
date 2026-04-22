@@ -4,24 +4,28 @@
     path: "{{ webapp_src_dir }}"
     state: directory
     mode: '0755'
+  tags: [webapp, webapp_deploy]
 
 - name: Copy app.py len server
   copy:
     src:  app.py
     dest: "{{ webapp_src_dir }}/app.py"
     mode: '0644'
+  tags: [webapp, webapp_deploy]
 
 - name: Copy requirements.txt len server
   copy:
     src:  requirements.txt
     dest: "{{ webapp_src_dir }}/requirements.txt"
     mode: '0644'
+  tags: [webapp, webapp_deploy]
 
 - name: Copy Dockerfile len server
   copy:
     src:  Dockerfile
     dest: "{{ webapp_src_dir }}/Dockerfile"
     mode: '0644'
+  tags: [webapp, webapp_deploy]
 
 - name: Cho MySQL san sang truoc khi chay Flask
   wait_for:
@@ -29,6 +33,7 @@
     port:    "{{ mysql_port }}"
     timeout: 60
     msg:     "Cho MySQL tren node2 khoi dong..."
+  tags: [webapp, webapp_deploy]
 
 - name: Build Docker image Flask app
   community.docker.docker_image:
@@ -37,12 +42,14 @@
       path: "{{ webapp_src_dir }}"
     source:     build
     force_source: true
+  tags: [webapp, webapp_build]
 
 - name: Stop container cu neu dang chay
   community.docker.docker_container:
     name:  "{{ webapp_container_name }}"
     state: absent
   ignore_errors: true
+  tags: [webapp, webapp_deploy]
 
 - name: Run Flask app container
   community.docker.docker_container:
@@ -60,6 +67,7 @@
       DB_PASS:     "{{ mysql_password }}"
       SERVER_NAME: "{{ inventory_hostname }}"
       SERVER_IP:   "{{ ansible_host }}"
+  tags: [webapp, webapp_deploy]
 
 - name: Cho Flask app khoi dong
   wait_for:
@@ -67,12 +75,15 @@
     port:    "{{ webapp_host_port }}"
     timeout: 30
     delay:   3
+  tags: [webapp, webapp_deploy]
 
 - name: Kiem tra Flask app status
   community.docker.docker_container_info:
     name: "{{ webapp_container_name }}"
   register: flask_info
+  tags: [webapp, webapp_verify]
 
 - name: In trang thai Flask app
   debug:
     msg: "Flask [{{ webapp_container_name }}]: {{ flask_info.container.State.Status }} | port {{ webapp_host_port }}"
+  tags: [webapp, webapp_verify]

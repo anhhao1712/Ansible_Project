@@ -1,0 +1,111 @@
+---
+# ================================================================
+# ROLE: backup
+# Mo ta: Backup MySQL data va webapp source code truoc khi deploy
+# Tags:
+#   - backup          : chay toan bo backup
+#   - backup_mysql    : chi backup MySQL
+#   - backup_webapp   : chi backup webapp
+#   - backup_cleanup  : don dep ban backup cu
+# ================================================================
+
+# --- Tao thu muc backup neu chua co ---
+- name: Tao thu muc backup MySQL
+  file:
+    path:  "{{ backup_mysql_dir }}"
+    state: directory
+    mode:  '0750'
+  tags: [backup, backup_mysql]
+
+- name: Tao thu muc backup webapp
+  file:
+    path:  "{{ backup_webapp_dir }}"
+    state: directory
+    mode:  '0750'
+  tags: [backup, backup_webapp]
+
+# --- Backup MySQL ---
+- name: Dump MySQL database ra file (co nen gzip)
+  shell: |
+    docker exec {{ mysql_container_name }} \
+      mysqldump -uroot -p'{{ mysql_root_password }}' \
+      --single-transaction --quick \
+      {{ mysql_database }} | gzip > {{ backup_mysql_file }}
+  args:
+    executable: /bin/bash
+  tags: [backup, backup_mysql]
+
+- name: Tao symlink latest cho MySQL backup
+  file:
+    src:   "{{ backup_mysql_file }}"
+    dest:  "{{ rollback_mysql_file }}"
+    state: link
+    force: true
+  tags: [backup, backup_mysql]
+
+- name: In duong dan file backup MySQL
+  debug:
+    msg: "[BACKUP] MySQL -> {{ backup_mysql_file }}"
+  tags: [backup, backup_mysql]
+
+# --- Backup Webapp ---
+- name: Nen thu muc webapp thanh tar.gz
+  archive:
+    path:   "{{ webapp_src_dir }}"
+    dest:   "{{ backup_webapp_file }}"
+    format: gz
+  tags: [backup, backup_webapp]
+
+- name: Tao symlink latest cho webapp backup
+  file:
+    src:   "{{ backup_webapp_file }}"
+    dest:  "{{ rollback_webapp_file }}"
+    state: link
+    force: true
+  tags: [backup, backup_webapp]
+
+- name: In duong dan file backup webapp
+  debug:
+    msg: "[BACKUP] Webapp -> {{ backup_webapp_file }}"
+  tags: [backup, backup_webapp]
+
+# --- Don dep ban cu (giu lai backup_keep_count ban gan nhat) ---
+- name: Lay danh sach backup MySQL cu
+  find:
+    paths:   "{{ backup_mysql_dir }}"
+    patterns: "mysql_*.sql.gz"
+    file_type: file
+  register: mysql_backup_files
+  tags: [backup, backup_cleanup]
+
+- name: Xoa backup MySQL cu (giu lai {{ backup_keep_count }} ban)
+  file:
+    path:  "{{ item.path }}"
+    state: absent
+  loop: >-
+    {{ mysql_backup_files.files
+       | sort(attribute='mtime')
+       | list
+       | slice_until(-backup_keep_count | int) }}
+  when: mysql_backup_files.files | length > backup_keep_count
+  tags: [backup, backup_cleanup]
+
+- name: Lay danh sach backup webapp cu
+  find:
+    paths:    "{{ backup_webapp_dir }}"
+    patterns: "webapp_*.tar.gz"
+    file_type: file
+  register: webapp_backup_files
+  tags: [backup, backup_cleanup]
+
+- name: Xoa backup webapp cu (giu lai {{ backup_keep_count }} ban)
+  file:
+    path:  "{{ item.path }}"
+    state: absent
+  loop: >-
+    {{ webapp_backup_files.files
+       | sort(attribute='mtime')
+       | list
+       | slice_until(-backup_keep_count | int) }}
+  when: webapp_backup_files.files | length > backup_keep_count
+  tags: [backup, backup_cleanup]

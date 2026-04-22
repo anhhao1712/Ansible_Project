@@ -4,6 +4,7 @@
     path: /opt/mysql_data
     state: directory
     mode: '0755'
+  tags: [mysql, mysql_deploy]
 
 - name: Run MySQL container
   community.docker.docker_container:
@@ -20,6 +21,7 @@
       MYSQL_DATABASE:      "{{ mysql_database }}"
       MYSQL_USER:          "{{ mysql_user }}"
       MYSQL_PASSWORD:      "{{ mysql_password }}"
+  tags: [mysql, mysql_deploy]
 
 - name: Cho MySQL khoi dong xong (timeout 60s)
   wait_for:
@@ -27,12 +29,14 @@
     port:    "{{ mysql_host_port }}"
     timeout: 60
     delay:   10
+  tags: [mysql, mysql_deploy]
 
 # -- Seed data -----------------------------------------------
 - name: Copy file seed data len DB server
   copy:
     src:  seed_data.sql
     dest: /tmp/seed_data.sql
+  tags: [mysql, mysql_seed]
 
 - name: Chay seed data vao database (dung root)
   shell: |
@@ -41,6 +45,7 @@
       -p'{{ mysql_root_password }}' \
       {{ mysql_database }} < /tmp/seed_data.sql
   ignore_errors: true
+  tags: [mysql, mysql_seed]
 
 - name: Query bang servers tu DB
   shell: |
@@ -51,10 +56,12 @@
       -e "SELECT id, hostname, ip, role, status FROM servers;"
   register: query_servers
   ignore_errors: true
+  tags: [mysql, mysql_verify]
 
 - name: In ket qua bang servers
   debug:
     msg: "{{ query_servers.stdout_lines }}"
+  tags: [mysql, mysql_verify]
 
 - name: Query deploy logs tu DB
   shell: |
@@ -65,16 +72,20 @@
       -e "SELECT server, task, result FROM deploy_logs;"
   register: query_logs
   ignore_errors: true
+  tags: [mysql, mysql_verify]
 
 - name: In ket qua deploy logs
   debug:
     msg: "{{ query_logs.stdout_lines }}"
+  tags: [mysql, mysql_verify]
 
 - name: Kiem tra MySQL container status
   community.docker.docker_container_info:
     name: "{{ mysql_container_name }}"
   register: mysql_info
+  tags: [mysql, mysql_verify]
 
 - name: In trang thai MySQL
   debug:
     msg: "MySQL [{{ mysql_container_name }}]: {{ mysql_info.container.State.Status }} | DB: {{ mysql_database }}"
+  tags: [mysql, mysql_verify]

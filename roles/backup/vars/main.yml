@@ -17,3 +17,8 @@ backup_webapp_file: "{{ backup_webapp_dir }}/webapp_{{ backup_timestamp }}.tar.g
 # --- Thu muc rollback (file backup moi nhat) ---
 rollback_mysql_file:  "{{ backup_mysql_dir }}/latest.sql.gz"
 rollback_webapp_file: "{{ backup_webapp_dir }}/latest.tar.gz"
+
+# --- Ten container ---
+mysql_container_name: mysql_db
+webapp_container_name: flask_app
+webapp_src_dir: /opt/webapp

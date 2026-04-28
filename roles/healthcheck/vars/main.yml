@@ -1,6 +1,10 @@
-# --- Health Check ---
-healthcheck_flask_url:    "http://127.0.0.1:{{ webapp_host_port }}/"
-healthcheck_nginx_url:    "http://127.0.0.1:{{ nginx_host_port }}/"
-healthcheck_timeout:      10
-healthcheck_retries:      3
-healthcheck_delay:        5
+healthcheck_flask_url: "http://127.0.0.1:{{ webapp_host_port }}/"
+healthcheck_timeout:   10
+healthcheck_retries:   3
+healthcheck_delay:     5
+
+webapp_container_name: flask_app
+mysql_container_name:  mysql_db
+
+webapp_host_port: 5000
+mysql_host_port:  3306

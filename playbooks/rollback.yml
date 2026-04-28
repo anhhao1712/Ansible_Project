@@ -1,11 +1,3 @@
----
-# ================================================================
-# PLAYBOOK: rollback.yml
-# Mo ta : Khoi phuc MySQL va webapp tu ban backup moi nhat
-# Chay  : ansible-playbook playbooks/rollback.yml
-#         ansible-playbook playbooks/rollback.yml --tags rollback_mysql
-#         ansible-playbook playbooks/rollback.yml --tags rollback_webapp
-# ================================================================
 
 # --- Rollback MySQL ---
 - name: Rollback MySQL Database (node2)
@@ -13,6 +5,8 @@
   become: true
   vars_files:
     - ../vault/secrets.yml
+  vars:
+    mysql_container_name: "mysql_db"  # [FIX] Khai báo biến bị thiếu
   tasks:
     - name: Kiem tra file backup MySQL ton tai
       stat:
@@ -48,6 +42,14 @@
 - name: Rollback Webapp Source Code (node1)
   hosts: web
   become: true
+  vars_files:
+    - ../vault/secrets.yml  # [FIX] Cần file vault để lấy mysql_password
+  vars:
+    # [FIX] Khai báo các biến container bị thiếu
+    webapp_container_name: "flask_app"
+    webapp_image:          "ansible_flask_app"
+    webapp_host_port:      5000
+    webapp_container_port: 5000
   tasks:
     - name: Kiem tra file backup webapp ton tai
       stat:

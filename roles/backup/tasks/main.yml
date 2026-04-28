@@ -2,110 +2,125 @@
 # ================================================================
 # ROLE: backup
 # Mo ta: Backup MySQL data va webapp source code truoc khi deploy
-# Tags:
-#   - backup          : chay toan bo backup
-#   - backup_mysql    : chi backup MySQL
-#   - backup_webapp   : chi backup webapp
-#   - backup_cleanup  : don dep ban backup cu
 # ================================================================
+
+- name: Khoa thoi gian backup de tranh lech phut tao file ao
+  set_fact:
+    locked_time: "{{ lookup('pipe', 'date +%Y-%m-%d_%H%M%S') }}"
+  tags: [always]
+
+- name: Chot duong dan file backup
+  set_fact:
+    backup_mysql_file:  "{{ backup_mysql_dir | default('/opt/backups/mysql') }}/mysql_{{ locked_time }}.sql.gz"
+    backup_webapp_file: "{{ backup_webapp_dir | default('/opt/backups/webapp') }}/webapp_{{ locked_time }}.tar.gz"
+  tags: [always]
 
 # --- Tao thu muc backup neu chua co ---
 - name: Tao thu muc backup MySQL
   file:
-    path:  "{{ backup_mysql_dir }}"
+    path:  "{{ backup_mysql_dir | default('/opt/backups/mysql') }}"
     state: directory
     mode:  '0750'
+  when: inventory_hostname in groups['db']   # <--- CHI CHAY TREN DB
   tags: [backup, backup_mysql]
 
 - name: Tao thu muc backup webapp
   file:
-    path:  "{{ backup_webapp_dir }}"
+    path:  "{{ backup_webapp_dir | default('/opt/backups/webapp') }}"
     state: directory
     mode:  '0750'
+  when: inventory_hostname in groups['web']  # <--- CHI CHAY TREN WEB
   tags: [backup, backup_webapp]
 
 # --- Backup MySQL ---
 - name: Dump MySQL database ra file (co nen gzip)
   shell: |
-    docker exec {{ mysql_container_name }} \
+    docker exec {{ mysql_container_name | default('mysql_db') }} \
       mysqldump -uroot -p'{{ mysql_root_password }}' \
       --single-transaction --quick \
-      {{ mysql_database }} | gzip > {{ backup_mysql_file }}
+      {{ mysql_database | default('ansible_iac_db') }} | gzip > {{ backup_mysql_file }}
   args:
     executable: /bin/bash
+  when: inventory_hostname in groups['db']
   tags: [backup, backup_mysql]
 
 - name: Tao symlink latest cho MySQL backup
   file:
     src:   "{{ backup_mysql_file }}"
-    dest:  "{{ rollback_mysql_file }}"
+    dest:  "{{ rollback_mysql_file | default('/opt/backups/mysql/latest.sql.gz') }}"
     state: link
     force: true
+  when: inventory_hostname in groups['db']
   tags: [backup, backup_mysql]
 
 - name: In duong dan file backup MySQL
   debug:
     msg: "[BACKUP] MySQL -> {{ backup_mysql_file }}"
+  when: inventory_hostname in groups['db']
   tags: [backup, backup_mysql]
 
 # --- Backup Webapp ---
-- name: Nen thu muc webapp thanh tar.gz
-  archive:
-    path:   "{{ webapp_src_dir }}"
-    dest:   "{{ backup_webapp_file }}"
-    format: gz
+- name: Nen thu muc webapp thanh tar.gz bang Shell
+  shell: "tar -czvf {{ backup_webapp_file }} -C /opt/flask_app ."
+  args:
+    executable: /bin/bash
+  when: inventory_hostname in groups['web']
   tags: [backup, backup_webapp]
 
 - name: Tao symlink latest cho webapp backup
   file:
     src:   "{{ backup_webapp_file }}"
-    dest:  "{{ rollback_webapp_file }}"
+    dest:  "{{ rollback_webapp_file | default('/opt/backups/webapp/latest.tar.gz') }}"
     state: link
     force: true
+  when: inventory_hostname in groups['web']
   tags: [backup, backup_webapp]
 
 - name: In duong dan file backup webapp
   debug:
     msg: "[BACKUP] Webapp -> {{ backup_webapp_file }}"
+  when: inventory_hostname in groups['web']
   tags: [backup, backup_webapp]
 
-# --- Don dep ban cu (giu lai backup_keep_count ban gan nhat) ---
+# --- Don dep ban cu ---
 - name: Lay danh sach backup MySQL cu
   find:
-    paths:   "{{ backup_mysql_dir }}"
+    paths:    "{{ backup_mysql_dir | default('/opt/backups/mysql') }}"
     patterns: "mysql_*.sql.gz"
     file_type: file
   register: mysql_backup_files
+  when: inventory_hostname in groups['db']
   tags: [backup, backup_cleanup]
 
-- name: Xoa backup MySQL cu (giu lai {{ backup_keep_count }} ban)
+- name: Xoa backup MySQL cu
   file:
     path:  "{{ item.path }}"
     state: absent
-  loop: >-
-    {{ mysql_backup_files.files
-       | sort(attribute='mtime')
-       | list
-       | slice_until(-backup_keep_count | int) }}
-  when: mysql_backup_files.files | length > backup_keep_count
+  loop: "{{ mysql_backup_files.files | sort(attribute='mtime') if mysql_backup_files.files is defined else [] }}"
+  loop_control:
+    index_var: idx
+  when:
+    - inventory_hostname in groups['db']
+    - idx < (mysql_backup_files.files | length - (backup_keep_count | default(3) | int))
   tags: [backup, backup_cleanup]
 
 - name: Lay danh sach backup webapp cu
   find:
-    paths:    "{{ backup_webapp_dir }}"
+    paths:    "{{ backup_webapp_dir | default('/opt/backups/webapp') }}"
     patterns: "webapp_*.tar.gz"
     file_type: file
   register: webapp_backup_files
+  when: inventory_hostname in groups['web']
   tags: [backup, backup_cleanup]
 
-- name: Xoa backup webapp cu (giu lai {{ backup_keep_count }} ban)
+- name: Xoa backup webapp cu
   file:
     path:  "{{ item.path }}"
     state: absent
-  loop: >-
-    {{ webapp_backup_files.files
-       | sort(attribute='mtime')
-       | list
-       | slice_until(-backup_keep_count | int) }}
-  when: webapp_backup_files.files | length > backup_keep_count
+  loop: "{{ webapp_backup_files.files | sort(attribute='mtime') if webapp_backup_files.files is defined else [] }}"
+  loop_control:
+    index_var: idx
+  when:
+    - inventory_hostname in groups['web']
+    - idx < (webapp_backup_files.files | length - (backup_keep_count | default(3) | int))
   tags: [backup, backup_cleanup]

@@ -102,6 +102,14 @@ Kiểm tra script Dynamic Inventory hoạt động đúng.
 
 ---
 
+## Cấp quyền thực thi cho script (Quan trọng)
+
+Ansible cần quyền thực thi (execute) để có thể tự động chạy ngầm file Python này. Nếu bỏ qua bước này, quá trình test sẽ báo lỗi Permission denied.
+
+```bash id="s1q8xh"
+chmod +x inventories/dynamic_inventory.py
+```
+
 ## 3.1 Test script sinh JSON
 
 ```bash id="u4m9kc"

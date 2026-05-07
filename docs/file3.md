@@ -13,69 +13,134 @@
 
 ---
 
-# Bước 1 — Thiết lập Vault Password trước khi Demo
+# Bước 1 — # Hướng dẫn Thiết lập Ansible Vault
 
 ## Mục đích
-
-Cấu hình Ansible tự đọc mật khẩu Vault để khi demo không cần nhập `--ask-vault-pass`.
+Tạo và mã hóa file chứa thông tin nhạy cảm (mật khẩu MySQL) bằng Ansible Vault, sau đó cấu hình tự động giải mã để deployment không cần nhập password thủ công.
 
 ---
 
-## 1.1 Tạo file chứa mật khẩu Vault
+## Bước 1: Tạo file secrets và mã hóa
 
-```bash id="q5w9ln"
-echo "vault_password_123" > ~/.vault_pass
+**1.1 Tạo file chứa secrets**
+
+```bash
+nano vault/secrets.yml
 ```
 
-> Thay `vault_password_123` bằng mật khẩu Vault thực tế của project.
+Thêm nội dung sau (thay bằng mật khẩu được nhóm cung cấp):
+
+```yaml
+vault_mysql_root_password: "Root@1234"
+vault_mysql_password: "Wp@1234"
+```
+
+Lưu file (Ctrl+O, Enter, Ctrl+X).
+
+**1.2 Mã hóa file bằng Ansible Vault**
+
+```bash
+ansible-vault encrypt vault/secrets.yml
+```
+
+Hệ thống sẽ yêu cầu:
+```
+New Vault password: @Hao1712
+Confirm Vault password: @Hao1712
+```
+
+Thay `@Hao1712` bằng mật khẩu Vault thực tế của project.
 
 ---
 
-## 1.2 Phân quyền bảo mật
+## Bước 2: Cấu hình tự động giải mã
 
-```bash id="f2r8tx"
+**2.1 Tạo file chứa Vault Password với phân quyền bảo mật**
+
+```bash
+echo "@Hao1712" > ~/.vault_pass
 chmod 600 ~/.vault_pass
 ```
 
----
+Điều này tạo file ẩn `~/.vault_pass` chỉ chủ sở hữu có thể đọc/ghi (cấp độ bảo mật cao).
 
-## 1.3 Cấu hình ansible.cfg
+**2.2 Cấu hình ansible.cfg**
 
-Mở file:
+Mở file cấu hình:
 
-```bash id="g8m1qy"
+```bash
 nano ansible.cfg
 ```
 
-Cập nhật:
+Đảm bảo có cấu hình sau:
 
-```ini id="v4c7kp"
+```ini
 [defaults]
-inventory = inventories/dynamic_inventory.py
+inventory = inventories/hosts.ini
 host_key_checking = False
 vault_password_file = ~/.vault_pass
 roles_path = ./roles
+collections_path = ./collections
 ```
 
 ---
 
-## 1.4 Kiểm tra Vault
+## Bước 3: Kiểm tra và xác nhận
 
-```bash id="t9n3hw"
+**3.1 Kiểm tra file đã mã hóa**
+
+```bash
+cat vault/secrets.yml
+```
+
+Kết quả phải hiển thị dạng mã hóa:
+```
+$ANSIBLE_VAULT;1.1;AES256
+...
+```
+
+**3.2 Kiểm tra tự động giải mã**
+
+```bash
 ansible-vault view vault/secrets.yml
 ```
 
-## Kết quả đúng
-
-Không hỏi password và hiển thị nội dung YAML:
-
-```yaml id="d7k4vm"
-mysql_root_password: root_password
-mysql_user: appuser
-mysql_password: app_password
+✅ **Kết quả đúng**: Không yêu cầu nhập password, hiển thị trực tiếp nội dung:
+```yaml
+vault_mysql_root_password: "Root@1234"
+vault_mysql_password: "Wp@1234"
 ```
 
 ---
+
+## Ghi chú quan trọng
+
+| Điểm | Chi tiết |
+|------|---------|
+| 🔐 **Bảo mật** | File `~/.vault_pass` có quyền 600, chỉ chủ sở hữu truy cập |
+| 🔑 **Mật khẩu Vault** | Giữ an toàn và không commit vào Git |
+| 📁 **File secrets.yml** | Có thể commit (đã mã hóa), nhưng `~/.vault_pass` không commit |
+| ✅ **Demo/Deploy** | Không cần `--ask-vault-pass` vì ansible.cfg đã cấu hình tự động |
+
+---
+
+## Sử dụng secrets trong playbook
+
+Trong playbook hoặc roles của bạn:
+
+```yaml
+- name: Cài đặt MySQL
+  hosts: all
+  vars_files:
+    - vault/secrets.yml
+  tasks:
+    - name: Đặt mật khẩu MySQL root
+      mysql_user:
+        name: root
+        password: "{{ vault_mysql_root_password }}"
+```
+
+Ansible sẽ tự động giải mã file `vault/secrets.yml` nhờ cấu hình `vault_password_file`.
 
 # Bước 2 — Cài đặt Dependencies (Ansible Galaxy)
 

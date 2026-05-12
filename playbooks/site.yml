@@ -16,7 +16,7 @@
 - name: Deploy MySQL Database Server (node2)
   hosts: db
   become: true
-  serial: 1                        # [SUA] Trien khai tung host mot, tranh downtime
+  serial: 1
   vars_files:
     - ../vault/secrets.yml
   roles:
@@ -25,16 +25,25 @@
     - { role: security, tags: [security] }
   tags: [db, deploy]
 
-# Play 3: Deploy Flask + Nginx len node1
-- name: Deploy Flask App + Nginx (node1)
+# Play 3: Deploy Flask len tat ca web nodes (node1 + node3)
+- name: Deploy Flask App (all web nodes)
   hosts: web
   become: true
-  serial: 1                        # [SUA] Trien khai tung host mot, tranh downtime
+  serial: 1
   vars_files:
     - ../vault/secrets.yml
   roles:
-    - { role: docker,        tags: [docker] }
-    - { role: webapp,        tags: [webapp] }
-    - { role: nginx_service, tags: [nginx] }
-    - { role: security,      tags: [security] }
+    - { role: docker,   tags: [docker] }
+    - { role: webapp,   tags: [webapp] }
+    - { role: security, tags: [security] }
   tags: [web, deploy]
+
+# Play 4: Deploy Nginx LB len node1
+- name: Deploy Nginx Load Balancer (node1)
+  hosts: lb
+  become: true
+  vars_files:
+    - ../vault/secrets.yml
+  roles:
+    - { role: nginx_service, tags: [nginx] }
+  tags: [lb, deploy]

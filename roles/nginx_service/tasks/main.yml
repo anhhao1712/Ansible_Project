@@ -18,9 +18,10 @@
     state: absent
   tags: [nginx, nginx_config]
 
-- name: Copy Nginx reverse proxy config
+# [SUA] Dung template LB thay vi reverse proxy cu
+- name: Render Nginx Load Balancer config
   ansible.builtin.template:
-    src:  nginx.conf.j2
+    src:  nginx_lb.conf.j2
     dest: /tmp/nginx_conf/default.conf
     mode: '0644'
   tags: [nginx, nginx_config]
@@ -44,7 +45,7 @@
   register: nginx_info
   tags: [nginx, nginx_verify]
 
-- name: In trang thai Nginx
+- name: In trang thai Nginx LB
   debug:
-    msg: "Nginx [{{ nginx_container_name }}]: {{ nginx_info.container.State.Status }} | port {{ nginx_host_port }} -> Flask :{{ webapp_host_port }}"
+    msg: "Nginx LB [{{ nginx_container_name }}]: {{ nginx_info.container.State.Status }} | port {{ nginx_host_port }} -> flask_cluster ({{ groups['web'] | join(', ') }})"
   tags: [nginx, nginx_verify]

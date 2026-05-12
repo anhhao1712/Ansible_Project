@@ -67,6 +67,8 @@
       DB_PASS:     "{{ mysql_password }}"
       SERVER_NAME: "{{ inventory_hostname }}"
       SERVER_IP:   "{{ ansible_host }}"
+      # [NEW] Truyen APP_VERSION vao container, mac dinh v1.0
+      APP_VERSION: "{{ webapp_app_version | default('v1.0') }}"
   tags: [webapp, webapp_deploy]
 
 - name: Cho Flask app khoi dong
@@ -85,5 +87,5 @@
 
 - name: In trang thai Flask app
   debug:
-    msg: "Flask [{{ webapp_container_name }}]: {{ flask_info.container.State.Status }} | port {{ webapp_host_port }}"
+    msg: "Flask [{{ webapp_container_name }}]: {{ flask_info.container.State.Status }} | port {{ webapp_host_port }} | version {{ webapp_app_version | default('v1.0') }}"
   tags: [webapp, webapp_verify]

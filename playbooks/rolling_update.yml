@@ -1,0 +1,245 @@
+---
+# ================================================================
+# rolling_update.yml — Zero-Downtime Rolling Update
+# ================================================================
+# Mo ta:
+#   Update tung Flask node mot (serial: 1), trong khi node kia van
+#   tiep nhan traffic qua Nginx LB. Auto-rollback neu health check fail.
+#
+# Chay:
+#   ansible-playbook playbooks/rolling_update.yml \
+#     -e "webapp_app_version=v2.0"
+#
+# Rollback tay:
+#   ansible-playbook playbooks/rolling_update.yml \
+#     -e "webapp_app_version=v1.0"
+# ================================================================
+
+# ----------------------------------------------------------------
+# PLAY 1: Pre-flight checks
+# ----------------------------------------------------------------
+- name: "[PRE-FLIGHT] Kiem tra truoc khi update"
+  hosts: web:lb
+  gather_facts: false
+  tasks:
+    - name: Ping tat ca nodes
+      ansible.builtin.ping:
+
+    - name: Kiem tra Nginx LB dang chay
+      community.docker.docker_container_info:
+        name: "{{ nginx_container_name }}"
+      register: lb_check
+      when: inventory_hostname in groups['lb']
+
+    - name: Assert Nginx LB OK
+      assert:
+        that: lb_check.container.State.Running == true
+        success_msg: "[OK] Nginx LB dang chay"
+        fail_msg:    "[FAIL] Nginx LB KHONG chay! Chay site.yml truoc."
+      when: inventory_hostname in groups['lb']
+
+    - name: Kiem tra Flask dang chay tren moi web node
+      community.docker.docker_container_info:
+        name: "{{ webapp_container_name }}"
+      register: flask_check
+      when: inventory_hostname in groups['web']
+
+    - name: Assert Flask OK
+      assert:
+        that: flask_check.container.State.Running == true
+        success_msg: "[OK] Flask dang chay tren {{ inventory_hostname }}"
+        fail_msg:    "[FAIL] Flask KHONG chay tren {{ inventory_hostname }}!"
+      when: inventory_hostname in groups['web']
+
+    - name: "[INFO] Chuan bi update"
+      debug:
+        msg: >
+          Update {{ groups['web'] | join(' -> ') }}
+          sang version {{ webapp_app_version | default('v1.0') }}
+          | LB: {{ groups['lb'][0] }}
+      run_once: true
+
+# ----------------------------------------------------------------
+# PLAY 2: Rolling update — serial: 1 (tung node mot)
+# ----------------------------------------------------------------
+- name: "[ROLLING UPDATE] Zero-downtime deploy"
+  hosts: web
+  become: true
+  serial: 1          # <-- Chi update 1 node tai mot thoi diem
+  gather_facts: true
+  vars_files:
+    - ../vault/secrets.yml
+
+  pre_tasks:
+    # BUOC 1: Rut node hien tai ra khoi LB upstream
+    - name: "[1/5] Remove {{ inventory_hostname }} khoi LB upstream"
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/nginx_service/templates/nginx_lb.conf.j2"
+        dest: /tmp/nginx_conf/default.conf
+        mode: '0644'
+      vars:
+        lb_skip_hosts: ["{{ inventory_hostname }}"]
+      delegate_to: "{{ groups['lb'][0] }}"
+      become: true
+
+    - name: "[1/5] Graceful reload Nginx LB"
+      ansible.builtin.shell: docker exec {{ nginx_container_name }} nginx -s reload
+      args:
+        executable: /bin/bash
+      delegate_to: "{{ groups['lb'][0] }}"
+      become: true
+
+    - name: "[1/5] Drain {{ drain_seconds }}s — Cho connections cu ket thuc"
+      ansible.builtin.pause:
+        seconds: "{{ drain_seconds }}"
+
+    # BUOC 2: Backup webapp hien tai truoc khi update
+    - name: "[2/5] Backup webapp hien tai"
+      ansible.builtin.archive:
+        path:   "{{ webapp_src_dir }}"
+        dest:   "/opt/backups/webapp/rolling_{{ inventory_hostname }}_{{ ansible_date_time.epoch }}.tar.gz"
+        format: gz
+      ignore_errors: true
+
+  tasks:
+    # BUOC 3: Deploy version moi
+    - name: "[3/5] Deploy {{ webapp_app_version | default('v1.0') }} len {{ inventory_hostname }}"
+      ansible.builtin.include_role:
+        name: webapp
+
+  post_tasks:
+    # BUOC 4: Health check + Auto-rollback neu fail
+    - name: "[4/5] Health check sau deploy"
+      block:
+        - name: "  HTTP GET /health"
+          ansible.builtin.uri:
+            url:         "http://{{ ansible_host }}:{{ webapp_host_port }}/health"
+            method:      GET
+            status_code: 200
+            timeout:     10
+          register:  hc_result
+          retries:   6
+          delay:     5
+          until:     hc_result.status == 200
+
+        - name: "  Verify version dung"
+          ansible.builtin.uri:
+            url:         "http://{{ ansible_host }}:{{ webapp_host_port }}/api/info"
+            method:      GET
+            status_code: 200
+          register: ver_result
+
+        - name: "  In ket qua health check"
+          ansible.builtin.debug:
+            msg: "[OK] {{ inventory_hostname }} healthy | version={{ ver_result.json.version | default('unknown') }}"
+
+      rescue:
+        # Health check fail -> Auto rollback
+        - name: "  [AUTO-ROLLBACK] Health check FAIL! Rollback {{ inventory_hostname }}"
+          ansible.builtin.debug:
+            msg: "Health check that bai. Dang tu dong rollback {{ inventory_hostname }}..."
+
+        - name: "  [ROLLBACK] Stop container loi"
+          community.docker.docker_container:
+            name:  "{{ webapp_container_name }}"
+            state: absent
+          ignore_errors: true
+
+        - name: "  [ROLLBACK] Khoi phuc webapp tu backup"
+          ansible.builtin.unarchive:
+            src:        "/opt/backups/webapp/rolling_{{ inventory_hostname }}_{{ ansible_date_time.epoch }}.tar.gz"
+            dest:       "/"
+            remote_src: true
+          ignore_errors: true
+
+        - name: "  [ROLLBACK] Restart Flask container cu"
+          community.docker.docker_container:
+            name:           "{{ webapp_container_name }}"
+            image:          "{{ webapp_image }}"
+            state:          started
+            restart_policy: always
+            ports:
+              - "{{ webapp_host_port }}:{{ webapp_container_port }}"
+            env:
+              DB_HOST:     "{{ mysql_host }}"
+              DB_PORT:     "{{ mysql_port | string }}"
+              DB_NAME:     "{{ mysql_database }}"
+              DB_USER:     "{{ mysql_user }}"
+              DB_PASS:     "{{ mysql_password }}"
+              SERVER_NAME: "{{ inventory_hostname }}"
+              SERVER_IP:   "{{ ansible_host }}"
+              APP_VERSION: "v1.0"
+
+        - name: "  [ROLLBACK] Add lai {{ inventory_hostname }} vao LB"
+          ansible.builtin.template:
+            src:  "{{ playbook_dir }}/../roles/nginx_service/templates/nginx_lb.conf.j2"
+            dest: /tmp/nginx_conf/default.conf
+            mode: '0644'
+          delegate_to: "{{ groups['lb'][0] }}"
+          become: true
+
+        - name: "  [ROLLBACK] Reload LB sau rollback"
+          ansible.builtin.shell: docker exec {{ nginx_container_name }} nginx -s reload
+          args:
+            executable: /bin/bash
+          delegate_to: "{{ groups['lb'][0] }}"
+          become: true
+
+        - name: "  [ROLLBACK] Fail playbook de bao loi ro rang"
+          ansible.builtin.fail:
+            msg: >
+              ❌ {{ inventory_hostname }} FAIL! Da tu dong rollback.
+              Kiem tra log: docker logs {{ webapp_container_name }}
+
+    # BUOC 5: Add node tro lai LB
+    - name: "[5/5] Add {{ inventory_hostname }} tro lai LB upstream"
+      ansible.builtin.template:
+        src:  "{{ playbook_dir }}/../roles/nginx_service/templates/nginx_lb.conf.j2"
+        dest: /tmp/nginx_conf/default.conf
+        mode: '0644'
+      delegate_to: "{{ groups['lb'][0] }}"
+      become: true
+
+    - name: "[5/5] Reload LB voi upstream day du"
+      ansible.builtin.shell: docker exec {{ nginx_container_name }} nginx -s reload
+      args:
+        executable: /bin/bash
+      delegate_to: "{{ groups['lb'][0] }}"
+      become: true
+
+    - name: "✅ {{ inventory_hostname }} update xong!"
+      ansible.builtin.debug:
+        msg: >
+          ✅ {{ inventory_hostname }} ({{ ansible_host }})
+          da len {{ webapp_app_version | default('v1.0') }} thanh cong
+          va da duoc add tro lai LB.
+
+# ----------------------------------------------------------------
+# PLAY 3: Final verification — kiem tra tong the
+# ----------------------------------------------------------------
+- name: "[FINAL] Kiem tra tong the sau update"
+  hosts: lb
+  gather_facts: false
+  tasks:
+    - name: "Final: HTTP check qua LB (/ endpoint)"
+      ansible.builtin.uri:
+        url:         "http://{{ ansible_host }}/health"
+        method:      GET
+        status_code: 200
+        timeout:     10
+      register: final_check
+      retries:  3
+      delay:    3
+      until:    final_check.status == 200
+
+    - name: "Final: Tong ket"
+      ansible.builtin.debug:
+        msg: |
+          ============================================================
+          ROLLING UPDATE HOAN TAT
+          ============================================================
+          Nodes updated : {{ groups['web'] | join(', ') }}
+          Version moi   : {{ webapp_app_version | default('v1.0') }}
+          LB status     : HTTP {{ final_check.status }}
+          URL           : http://{{ ansible_host }}
+          ============================================================

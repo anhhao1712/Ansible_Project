@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, jsonify
 import pymysql
 import os
 from datetime import datetime
@@ -13,6 +13,15 @@ DB_USER     = os.environ.get("DB_USER",     "root")
 DB_PASS     = os.environ.get("DB_PASS",     "")
 SERVER_NAME = os.environ.get("SERVER_NAME", "node1")
 SERVER_IP   = os.environ.get("SERVER_IP",   "unknown")
+# [NEW] Bien version de demo rolling update
+APP_VERSION = os.environ.get("APP_VERSION", "v1.0")
+
+# Mau header theo version de de nhan biet khi demo
+VERSION_COLORS = {
+    "v1.0": {"bg": "#0f3460", "accent": "#e94560", "label": "STABLE"},
+    "v2.0": {"bg": "#0d3320", "accent": "#4caf50", "label": "NEW"},
+}
+vc = VERSION_COLORS.get(APP_VERSION, {"bg": "#2d1a00", "accent": "#ffb74d", "label": "DEV"})
 
 def query_db(sql):
     try:
@@ -33,9 +42,8 @@ def query_db(sql):
 
 @app.route("/")
 def index():
-    servers,  err1 = query_db("SELECT * FROM servers ORDER BY id")
-    logs,     err2 = query_db("SELECT * FROM deploy_logs ORDER BY id")
-
+    servers, err1 = query_db("SELECT * FROM servers ORDER BY id")
+    logs,    err2 = query_db("SELECT * FROM deploy_logs ORDER BY id")
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     html = f"""<!DOCTYPE html>
@@ -43,16 +51,19 @@ def index():
 <head>
   <meta charset='UTF-8'>
   <meta name='viewport' content='width=device-width, initial-scale=1'>
-  <title>Ansible IAC Project</title>
+  <title>Ansible IAC — {SERVER_NAME}</title>
   <style>
     *{{box-sizing:border-box;margin:0;padding:0}}
     body{{font-family:'Segoe UI',sans-serif;background:#0f0f1a;color:#e2e2f0;padding:32px 16px}}
     .container{{max-width:900px;margin:auto}}
 
-    .header{{background:#16213e;border:1px solid #2a2a5a;border-radius:16px;
+    .header{{background:{vc['bg']};border:1px solid #2a2a5a;border-radius:16px;
              padding:32px;text-align:center;margin-bottom:24px}}
-    .header h1{{font-size:2rem;color:#e94560;letter-spacing:1px}}
+    .header h1{{font-size:2rem;color:{vc['accent']};letter-spacing:1px}}
     .header p{{color:#8888aa;margin-top:8px}}
+    .version-badge{{display:inline-block;background:{vc['accent']};color:#fff;
+                   font-weight:700;font-size:1rem;padding:4px 18px;border-radius:20px;
+                   margin-top:12px;letter-spacing:2px}}
     .badges{{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-top:16px}}
     .badge{{background:#0f3460;border:1px solid #1a5a9a;border-radius:20px;
             padding:5px 16px;font-size:.82rem;color:#7ec8e3}}
@@ -80,7 +91,6 @@ def index():
 
     .db-info{{background:#0a1628;border:1px solid #1a3050;border-radius:8px;
               padding:12px 16px;margin-bottom:16px;font-size:.82rem;color:#556688}}
-
     .footer{{text-align:center;color:#3a3a5a;font-size:.8rem;margin-top:8px}}
   </style>
 </head>
@@ -90,11 +100,12 @@ def index():
   <div class='header'>
     <h1>Ansible IAC Project</h1>
     <p>Infrastructure as Code — Tu dong hoa ha tang bang Ansible + Flask + MySQL</p>
+    <div class='version-badge'>{APP_VERSION} &nbsp;·&nbsp; {vc['label']}</div>
     <div class='badges'>
       <div class='badge'>Server: <span>{SERVER_NAME}</span></div>
       <div class='badge'>IP: <span>{SERVER_IP}</span></div>
       <div class='badge'>DB: <span>{DB_NAME}@{DB_HOST}</span></div>
-      <div class='badge'>Deploy: <span>{now}</span></div>
+      <div class='badge'>Time: <span>{now}</span></div>
     </div>
   </div>
 
@@ -110,8 +121,8 @@ def index():
 
     if servers:
         for s in servers:
-            role_tag  = "tag-blue"   if s["role"]   == "web"     else "tag-orange"
-            stat_tag  = "tag-green"  if s["status"]  == "running" else ""
+            role_tag = "tag-blue"  if s["role"]   == "web"     else "tag-orange"
+            stat_tag = "tag-green" if s["status"] == "running" else ""
             html += f"""
         <tr>
           <td>{s['id']}</td>
@@ -155,7 +166,7 @@ def index():
   </div>
 
   <div class='footer'>
-    Ansible IAC Project &nbsp;|&nbsp; Flask/Python &nbsp;|&nbsp; {now}
+    Ansible IAC Project &nbsp;|&nbsp; Flask/Python &nbsp;|&nbsp; {APP_VERSION} &nbsp;|&nbsp; {now}
   </div>
 
 </div>
@@ -163,12 +174,27 @@ def index():
 </html>"""
     return html
 
+
 @app.route("/health")
 def health():
     _, err = query_db("SELECT 1")
     if err:
-        return {{"status": "error", "db": err}}, 500
-    return {{"status": "ok", "server": SERVER_NAME, "db": DB_NAME}}
+        return jsonify({"status": "error", "server": SERVER_NAME, "version": APP_VERSION, "db_error": err}), 500
+    return jsonify({"status": "ok", "server": SERVER_NAME, "version": APP_VERSION, "db": DB_NAME})
+
+
+@app.route("/api/info")
+def api_info():
+    """[NEW v2.0] Endpoint tra ve thong tin server duoi dang JSON"""
+    return jsonify({
+        "server":  SERVER_NAME,
+        "ip":      SERVER_IP,
+        "version": APP_VERSION,
+        "db_host": DB_HOST,
+        "db_name": DB_NAME,
+        "time":    datetime.now().isoformat()
+    })
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)

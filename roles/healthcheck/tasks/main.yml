@@ -1,14 +1,5 @@
 ---
-# ================================================================
-# ROLE: healthcheck
-# Mo ta: Kiem tra trang thai cac container va dich vu sau deploy
-# Tags:
-#   - healthcheck           : chay toan bo
-#   - healthcheck_containers: kiem tra docker container
-#   - healthcheck_http      : kiem tra HTTP endpoint
-# ================================================================
-
-# --- Kiem tra trang thai Docker containers ---
+# --- Kiem tra Docker containers ---
 - name: Kiem tra MySQL container
   community.docker.docker_container_info:
     name: "{{ mysql_container_name }}"
@@ -41,38 +32,39 @@
     that:
       - hc_flask.container is defined
       - hc_flask.container.State.Running == true
-    success_msg: "[OK] Flask container dang chay"
+    success_msg: "[OK] Flask container dang chay tren {{ inventory_hostname }}"
     fail_msg:    "[FAIL] Flask container KHONG chay!"
   ignore_errors: true
   tags: [healthcheck, healthcheck_containers]
   when: inventory_hostname in groups['web']
 
-- name: Kiem tra Nginx container
+# [NEW] Kiem tra Nginx LB container
+- name: Kiem tra Nginx LB container
   community.docker.docker_container_info:
     name: "{{ nginx_container_name }}"
   register: hc_nginx
   ignore_errors: true
   tags: [healthcheck, healthcheck_containers]
-  when: inventory_hostname in groups['web']
+  when: inventory_hostname in groups['lb']
 
-- name: Assert Nginx container dang chay
+- name: Assert Nginx LB dang chay
   assert:
     that:
       - hc_nginx.container is defined
       - hc_nginx.container.State.Running == true
-    success_msg: "[OK] Nginx container dang chay"
-    fail_msg:    "[FAIL] Nginx container KHONG chay!"
+    success_msg: "[OK] Nginx LB dang chay"
+    fail_msg:    "[FAIL] Nginx LB KHONG chay!"
   ignore_errors: true
   tags: [healthcheck, healthcheck_containers]
-  when: inventory_hostname in groups['web']
+  when: inventory_hostname in groups['lb']
 
-# --- Kiem tra HTTP endpoint ---
-- name: HTTP check Flask app (retry {{ healthcheck_retries }} lan)
+# --- HTTP checks ---
+- name: "HTTP check Flask direct (retry {{ healthcheck_retries }} lan)"
   uri:
-    url:            "{{ healthcheck_flask_url }}"
-    method:         GET
-    status_code:    200
-    timeout:        "{{ healthcheck_timeout }}"
+    url:         "{{ healthcheck_flask_url }}"
+    method:      GET
+    status_code: 200
+    timeout:     "{{ healthcheck_timeout }}"
   register: hc_flask_http
   retries:  "{{ healthcheck_retries }}"
   delay:    "{{ healthcheck_delay }}"
@@ -81,38 +73,23 @@
   tags: [healthcheck, healthcheck_http]
   when: inventory_hostname in groups['web']
 
-- name: In ket qua HTTP check Flask
-  debug:
-    msg: >-
-      [HTTP Flask] status={{ hc_flask_http.status | default('N/A') }}
-      url={{ healthcheck_flask_url }}
-  tags: [healthcheck, healthcheck_http]
-  when: inventory_hostname in groups['web']
-
-- name: HTTP check Nginx (retry {{ healthcheck_retries }} lan)
+# [NEW] HTTP check qua LB
+- name: "HTTP check qua Nginx LB (port 80)"
   uri:
-    url:            "{{ healthcheck_nginx_url }}"
-    method:         GET
-    status_code:    [200, 301, 302]
-    timeout:        "{{ healthcheck_timeout }}"
-  register: hc_nginx_http
+    url:         "http://{{ ansible_host }}/health"
+    method:      GET
+    status_code: 200
+    timeout:     "{{ healthcheck_timeout }}"
+  register: hc_lb_http
   retries:  "{{ healthcheck_retries }}"
   delay:    "{{ healthcheck_delay }}"
-  until:    hc_nginx_http.status in [200, 301, 302]
+  until:    hc_lb_http.status == 200
   ignore_errors: true
   tags: [healthcheck, healthcheck_http]
-  when: inventory_hostname in groups['web']
-
-- name: In ket qua HTTP check Nginx
-  debug:
-    msg: >-
-      [HTTP Nginx] status={{ hc_nginx_http.status | default('N/A') }}
-      url={{ healthcheck_nginx_url }}
-  tags: [healthcheck, healthcheck_http]
-  when: inventory_hostname in groups['web']
+  when: inventory_hostname in groups['lb']
 
 # --- Kiem tra port MySQL ---
-- name: Kiem tra MySQL port {{ mysql_host_port }} co mo khong
+- name: "Kiem tra MySQL port {{ mysql_host_port }} co mo khong"
   wait_for:
     host:    "127.0.0.1"
     port:    "{{ mysql_host_port }}"
@@ -126,15 +103,18 @@
 - name: Tong ket healthcheck
   debug:
     msg: |
-      ========== HEALTH CHECK SUMMARY [{{ inventory_hostname }}] ==========
+      ========== HEALTH CHECK [{{ inventory_hostname }}] ==========
       {% if inventory_hostname in groups['db'] %}
-      MySQL  container : {{ 'OK' if (hc_mysql.container is defined and hc_mysql.container.State.Running) else 'FAIL' }}
+      MySQL container : {{ 'OK' if (hc_mysql.container is defined and hc_mysql.container.State.Running) else 'FAIL' }}
+      MySQL port      : {{ mysql_host_port }}
       {% endif %}
       {% if inventory_hostname in groups['web'] %}
-      Flask  container : {{ 'OK' if (hc_flask.container is defined and hc_flask.container.State.Running) else 'FAIL' }}
-      Nginx  container : {{ 'OK' if (hc_nginx.container is defined and hc_nginx.container.State.Running) else 'FAIL' }}
-      Flask  HTTP      : {{ hc_flask_http.status | default('FAIL') }}
-      Nginx  HTTP      : {{ hc_nginx_http.status | default('FAIL') }}
+      Flask container : {{ 'OK' if (hc_flask.container is defined and hc_flask.container.State.Running) else 'FAIL' }}
+      Flask HTTP      : {{ hc_flask_http.status | default('FAIL') }}
       {% endif %}
-      ====================================================================
+      {% if inventory_hostname in groups['lb'] %}
+      Nginx LB        : {{ 'OK' if (hc_nginx.container is defined and hc_nginx.container.State.Running) else 'FAIL' }}
+      LB HTTP         : {{ hc_lb_http.status | default('FAIL') }}
+      {% endif %}
+      =============================================================
   tags: [healthcheck]

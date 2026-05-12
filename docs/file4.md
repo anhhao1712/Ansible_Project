@@ -1,358 +1,354 @@
-# Hướng dẫn chạy Ansible Project v2 — Từ đầu đến demo
+# Hướng dẫn Kiểm thử (Testing) Hệ thống Ansible v2
 
-## Tổng quan kiến trúc
+## Yêu cầu
 
-```
-[Máy tính / Control Node]
-        │  SSH
-        ├─────────────────────────────────────────────┐
-        │                                             │
-        ▼                                             ▼
-  node1 (192.168.80.139)                    node2 (192.168.80.140)
-  ┌─────────────────────┐                   ┌──────────────────┐
-  │ Nginx LB  :80       │                   │ MySQL 8.0  :3306 │
-  │ Flask App :5000     │◄──── DB ──────────│                  │
-  └─────────────────────┘                   └──────────────────┘
-        │ LB round-robin
-        ▼
-  node3 (192.168.80.141)
-  ┌─────────────────────┐
-  │ Flask App :5000     │
-  └─────────────────────┘
-```
+* Đã clone project về và giải nén `Ansible_Project_v2.rar`.
+* Máy Control Node (máy chạy Ansible) đã cài sẵn Ansible >= 2.14 và Python >= 3.9.
+* Máy ảo `node1` (Web/LB - `192.168.80.139`) và `node2` (DB - `192.168.80.140`) đang chạy bình thường (`vagrant status` báo `running`).
+* Máy ảo `node3` (Web - `192.168.80.141`) đã được clone từ node1 và đổi IP (xem `docs/ROLLING_UPDATE_DEMO.md` mục "Bước 0").
 
 ---
 
-## PHẦN 1: Chuẩn bị môi trường
+## Bước 1 — Cài đặt Dependencies (Ansible Galaxy)
 
-### 1.1 Cài Ansible trên máy tính (Control Node)
-
-```bash
-# Ubuntu/Debian
-sudo apt update
-sudo apt install ansible python3-pip -y
-
-# macOS
-brew install ansible
-
-# Kiểm tra
-ansible --version   # cần >= 2.14
-python3 --version   # cần >= 3.9
-```
-
-### 1.2 Cài Python dependencies
-
-```bash
-pip3 install paramiko pymysql
-```
-
-### 1.3 Giải nén project
-
-```bash
-# Giải nén RAR
-unrar x Ansible_Project_v2.rar
-cd Ansible_Project_v2
-```
-
-### 1.4 Cài Ansible Galaxy collections
+**Mục đích:** Đảm bảo các thư viện mở rộng (collections) cần thiết cho project đã được cài đầy đủ trước khi chạy bất kỳ lệnh nào.
 
 ```bash
 ansible-galaxy collection install -r requirements.yml
 ```
 
-Lệnh này cài:
-- `community.docker` — quản lý Docker containers
-- `community.general` — các module tổng hợp
-- `community.mysql` — quản lý MySQL
-- `community.crypto` — SSL/crypto
+**Kết quả đúng:**
+
+```
+Starting galaxy collection install process
+...
+Nothing to do. All requested collections are already installed.
+(Hoặc: was installed successfully)
+```
 
 ---
 
-## PHẦN 2: Tạo các VMs
+## Bước 2 — Kiểm tra kết nối tới 3 Nodes
 
-### 2.1 Khởi động node1 và node2 bằng Vagrant
-
-```bash
-vagrant up node1 node2
-```
-
-Vagrant tự động:
-- Tạo 2 VM Ubuntu 20.04
-- Gán IP tĩnh: node1=`192.168.80.139`, node2=`192.168.80.140`
-- Cài Python3, SSH
-
-### 2.2 Tạo node3 (clone từ node1)
-
-**Trong VMware:**
-1. Right-click VM `ansible-lab-node1` → **Clone**
-2. Chọn **Full Clone**
-3. Đặt tên: `ansible-lab-node3`
-4. Sau khi clone xong, **bật VM node3** lên
-
-**Đổi IP node3 thành `192.168.80.141`:**
-
-```bash
-# SSH vào node3 (lúc đầu nó có IP của node1)
-# Tìm IP hiện tại qua VMware console hoặc DHCP
-
-# Sau khi SSH vào:
-sudo nano /etc/netplan/01-netcfg.yaml
-```
-
-Sửa nội dung thành:
-```yaml
-network:
-  version: 2
-  ethernets:
-    eth1:
-      addresses:
-        - 192.168.80.141/24
-```
-
-```bash
-sudo netplan apply
-hostname   # Nên đổi thành node3
-sudo hostnamectl set-hostname node3
-```
-
-> **Lưu ý:** Nếu dùng VirtualBox thì dùng `ip addr` để kiểm tra interface name thay vì eth1.
-
-### 2.3 Kiểm tra kết nối 3 nodes
+**Mục đích:** Xác nhận Ansible có thể SSH vào cả 3 máy ảo và chúng đang online trước khi deploy.
 
 ```bash
 ansible all -m ping
 ```
 
-Kết quả mong đợi:
+**Kết quả đúng:**
+
 ```
 node1 | SUCCESS => {"ping": "pong"}
 node2 | SUCCESS => {"ping": "pong"}
 node3 | SUCCESS => {"ping": "pong"}
 ```
 
-Nếu node3 lỗi: kiểm tra lại IP và SSH `ssh vagrant@192.168.80.141`.
+> Nếu `node3` báo `UNREACHABLE`: kiểm tra lại IP (`ssh vagrant@192.168.80.141`) và đảm bảo VM đang chạy.
 
 ---
 
-## PHẦN 3: Deploy toàn bộ hệ thống
+## Bước 3 — Test Dynamic Inventory
 
-### 3.1 (Tuỳ chọn) Mở Ansible Vault nếu cần chỉnh secrets
+**Mục đích:** Kiểm tra script Python đọc danh sách host tự động có sinh đúng group và host không.
 
-```bash
-# Xem nội dung vault
-ansible-vault view vault/secrets.yml
-
-# Sửa secrets
-ansible-vault edit vault/secrets.yml
-# Password vault mặc định: "vagrant" (hoặc xem docs/Setup.md)
-```
-
-### 3.2 Deploy
+**Lệnh 1 — Test script sinh JSON:**
 
 ```bash
-ansible-playbook playbooks/site.yml
+python3 inventories/dynamic_inventory.py --list
 ```
+
+**Kết quả đúng:** Ra một chuỗi JSON chứa danh sách group `web` (node1, node3), `db` (node2), `lb` (node1) và `_meta`.
+
+**Lệnh 2 — Test Ansible đọc file Inventory:**
+
+```bash
+ansible -i inventories/dynamic_inventory.py all --list-hosts
+```
+
+**Kết quả đúng:**
+
+```
+  hosts (3):
+    node1
+    node2
+    node3
+```
+
+---
+
+## Bước 4 — Triển khai hệ thống (Deploy) lần đầu
+
+**Mục đích:** Đẩy toàn bộ hạ tầng (Docker, MySQL, Flask, Nginx Load Balancer) lên 3 node. **Bắt buộc chạy bước này trước khi test các tính năng sau.**
+
+```bash
+ansible-playbook playbooks/site.yml --ask-vault-pass
+```
+
+(Nhập mật khẩu vault khi được hỏi — mặc định: `vagrant`)
 
 **Thứ tự deploy:**
 
 | Play | Hosts | Nội dung |
 |------|-------|---------|
-| Play 1 | all | Test biến global |
-| Play 2 | node2 | Docker + MySQL + Security |
-| Play 3 | node1, node3 | Docker + Flask App + Security |
+| Play 1 | all | Kiểm tra biến global |
+| Play 2 | node2 | Docker + MySQL 8.0 + Security |
+| Play 3 | node1, node3 | Docker + Flask App (serial: 1) + Security |
 | Play 4 | node1 | Nginx Load Balancer |
 
-Mất khoảng **5–10 phút** tùy tốc độ mạng (pull Docker images).
+**Kết quả đúng:**
 
-### 3.3 Kiểm tra sau deploy
-
-```bash
-ansible-playbook playbooks/healthcheck.yml
-```
+* Terminal chạy qua các task xanh (`ok`) hoặc vàng (`changed`), không có dòng `FAILED` đỏ nào.
+* Mở trình duyệt truy cập `http://192.168.80.139` thấy giao diện "Ansible IAC Project" với badge **v1.0** màu xanh dương và bảng dữ liệu từ MySQL.
 
 ---
 
-## PHẦN 4: Kiểm tra hệ thống hoạt động
+## Bước 5 — Kiểm tra Load Balancer Round-Robin
 
-### 4.1 Mở browser
-
-Truy cập: **http://192.168.80.139**
-
-Thấy trang Flask app với:
-- Badge **v1.0** màu xanh dương
-- Bảng server list từ MySQL
-- Badge "Server: node1" hoặc "node3" (tuỳ request)
-
-### 4.2 Kiểm tra Load Balancer round-robin
+**Mục đích:** Xác nhận Nginx đang phân phối traffic đều đến cả node1 và node3.
 
 ```bash
-# Chạy 10 request liên tiếp, xem server thay đổi
-for i in $(seq 1 10); do
-  curl -s http://192.168.80.139/health | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['server'])"
+for i in $(seq 1 8); do
+  curl -s http://192.168.80.139/health | python3 -c \
+    "import sys,json; d=json.load(sys.stdin); print(d['server'])"
 done
 ```
 
-Kết quả mong đợi:
+**Kết quả đúng:**
+
 ```
 node1
 node3
 node1
 node3
-...
+node1
+node3
+node1
+node3
 ```
 
-### 4.3 Xem config Nginx LB hiện tại
+Server xen kẽ đều đặn giữa `node1` và `node3` → LB round-robin hoạt động đúng.
+
+**Kiểm tra thêm — Xem config Nginx LB:**
 
 ```bash
-ssh vagrant@192.168.80.139 'cat /tmp/nginx_conf/default.conf'
+ssh vagrant@192.168.80.139 "cat /tmp/nginx_conf/default.conf"
 ```
+
+**Kết quả đúng:** Thấy block `upstream flask_cluster` chứa 2 dòng `server` trỏ về `192.168.80.139:5000` và `192.168.80.141:5000`.
 
 ---
 
-## PHẦN 5: Demo Rolling Update
+## Bước 6 — Test Tags & Dry-run (Check mode)
 
-### 5.1 Mở 2 terminal song song
+**Mục đích:** Chạy thử kịch bản an toàn, chỉ chạy 1 phần cụ thể mà không làm thay đổi hệ thống thật.
 
-**Terminal A** — Theo dõi traffic liên tục:
+```bash
+ansible-playbook playbooks/site.yml --tags webapp --check --ask-vault-pass
+```
+
+**Kết quả đúng:**
+
+* Playbook chỉ chạy các task có gắn tag `webapp` (bỏ qua phần cài Docker, MySQL, Nginx).
+* Trạng thái các task chủ yếu là `ok` hoặc `skipping`. Hệ thống thực tế không bị thay đổi.
+
+---
+
+## Bước 7 — Test tính năng Backup
+
+**Mục đích:** Tạo bản sao lưu mã nguồn Web và dữ liệu Database trước khi xảy ra sự cố.
+
+```bash
+ansible-playbook playbooks/backup.yml --ask-vault-pass
+```
+
+**Kết quả đúng:** Terminal chạy thành công. Để xác nhận, kiểm tra trực tiếp trên máy ảo:
+
+**Kiểm tra trên node1 (Web):**
+
+```bash
+ssh vagrant@192.168.80.139 "sudo ls -la /opt/backups/webapp/"
+```
+
+**Kết quả:** Thấy file nén `webapp_YYYY-MM-DD_HHMM.tar.gz` và symlink `latest.tar.gz` trỏ đúng vào nó.
+
+**Kiểm tra trên node2 (DB):**
+
+```bash
+ssh vagrant@192.168.80.140 "sudo ls -la /opt/backups/mysql/"
+```
+
+**Kết quả:** Thấy file `mysql_YYYY-MM-DD_HHMM.sql.gz` và symlink `latest.sql.gz`.
+
+---
+
+## Bước 8 — Test Health Check
+
+**Mục đích:** Kiểm tra hệ thống monitoring tự phát hiện sự cố.
+
+**1. Đánh sập Flask trên node1:**
+
+```bash
+ssh vagrant@192.168.80.139 "sudo docker stop flask_app"
+```
+
+(F5 trình duyệt: vẫn load được vì LB tự chuyển sang node3)
+
+**2. Chạy Health Check:**
+
+```bash
+ansible-playbook playbooks/healthcheck.yml --ask-vault-pass
+```
+
+**Kết quả đúng:** Terminal báo `FAILED` (chữ đỏ) ở task "Assert Flask container dang chay" trên node1. Summary hiển thị:
+
+```
+Flask container : FAIL
+Flask HTTP      : FAIL
+```
+
+**3. Khởi động lại Flask:**
+
+```bash
+ssh vagrant@192.168.80.139 "sudo docker start flask_app"
+```
+
+**4. Chạy Health Check lần nữa để xác nhận:**
+
+```bash
+ansible-playbook playbooks/healthcheck.yml --ask-vault-pass
+```
+
+**Kết quả đúng:** Tất cả đều `OK`. F5 trình duyệt thấy traffic trở lại phân phối cho cả node1 và node3.
+
+---
+
+## Bước 9 — Test Rolling Update (Zero-Downtime)
+
+**Mục đích:** Nâng cấp Flask app từ v1.0 lên v2.0 mà không làm gián đoạn traffic người dùng.
+
+**1. Mở 2 terminal song song.**
+
+**Terminal A — Theo dõi traffic liên tục:**
+
 ```bash
 watch -n 0.5 'curl -s http://192.168.80.139/health'
 ```
 
-**Terminal B** — Chạy rolling update:
+**Terminal B — Chạy rolling update:**
+
 ```bash
 ansible-playbook playbooks/rolling_update.yml \
-  -e "webapp_app_version=v2.0"
+  -e "webapp_app_version=v2.0" --ask-vault-pass
 ```
 
-### 5.2 Quan sát flow trong Terminal B
+**Kết quả đúng ở Terminal B:**
 
 ```
-[PRE-FLIGHT] ping OK → LB OK → Flask OK
+[PRE-FLIGHT] ping OK → LB OK → Flask OK trên cả 2 node
 
-── node3 (serial: 1) ──────────────────────────
-[1/5] Remove node3 khỏi LB → nginx reload
-[1/5] Drain 8s ...
-[2/5] Backup webapp node3
-[3/5] Deploy v2.0 → build image, restart container
-[4/5] Health check → HTTP 200 ✓
-[5/5] Add node3 trở lại LB → nginx reload
-✅ node3 xong!
+[ROLLING UPDATE] node3:
+  [1/5] Remove node3 khỏi LB → nginx reload
+  [1/5] Drain 8s ...
+  [2/5] Backup webapp node3
+  [3/5] Deploy v2.0 → build image, restart container
+  [4/5] Health check HTTP 200 ✓
+  [5/5] Add node3 trở lại LB → nginx reload
+  ✅ node3 update xong!
 
-── node1 (serial: 1) ──────────────────────────
-[1/5] Remove node1 khỏi LB → nginx reload
-  (Terminal A lúc này chỉ thấy node3)
-[3/5] Deploy v2.0 ...
-[4/5] Health check → HTTP 200 ✓
-[5/5] Add node1 trở lại LB → nginx reload
-✅ node1 xong!
+[ROLLING UPDATE] node1: (tương tự)
+  ✅ node1 update xong!
 
-[FINAL] HTTP check qua LB → 200 OK ✓
+[FINAL] HTTP check qua LB → 200 OK
 ROLLING UPDATE HOÀN TẤT
 ```
 
-### 5.3 Quan sát trong Terminal A (watch)
+**Kết quả đúng ở Terminal A:** Không có lần nào báo lỗi hay timeout. Trong khi update node3, chỉ thấy `node1`. Trong khi update node1, chỉ thấy `node3`. Sau khi xong, hiển thị `"version": "v2.0"`.
 
-| Thời điểm | Terminal A thấy gì |
-|-----------|------------------|
-| Bình thường | server: node1 / node3 luân phiên |
-| Đang update node3 | Chỉ thấy node1 |
-| node3 xong, đang update node1 | Chỉ thấy node3 |
-| Cả 2 xong | node1 / node3 luân phiên, version: v2.0 |
-
-**Không có downtime** — Terminal A không bao giờ thấy lỗi.
-
-### 5.4 Kiểm tra version trên browser
-
-Mở **http://192.168.80.139** và F5 liên tục:
-- Badge đổi từ **xanh dương (v1.0)** sang **xanh lá (v2.0)**
-- SERVER_NAME vẫn thay đổi luân phiên node1/node3
+**Kiểm tra trên browser:** Truy cập `http://192.168.80.139`, F5 liên tục → badge đổi từ **xanh dương (v1.0)** sang **xanh lá (v2.0)**.
 
 ---
 
-## PHẦN 6: Demo Auto-Rollback (Bonus)
+## Bước 10 — Test Auto-Rollback
 
-Để demo auto-rollback: SSH vào node3 và **xóa Flask container** trong khi playbook đang chạy ở bước health check.
+**Mục đích:** Xác nhận hệ thống tự động phát hiện deploy lỗi và phục hồi về trạng thái ổn định.
 
-**Terminal C** (chuẩn bị sẵn, chạy sau khi Terminal B báo "Drain 8s"):
+**1. Đảm bảo hệ thống đang chạy bình thường (bước 9 đã xong).**
+
+**2. Mở 2 terminal song song.**
+
+**Terminal A — Theo dõi traffic:**
+
 ```bash
-ssh vagrant@192.168.80.141 'docker rm -f flask_app'
+watch -n 0.5 'curl -s http://192.168.80.139/health'
 ```
 
-Ansible sẽ tự động:
-1. Health check fail (6 lần × 5s = 30s)
-2. Chạy rescue block
-3. Restore backup → restart Flask v1.0
-4. Add node3 trở lại LB
-5. Fail playbook với thông báo rõ ràng
+**Terminal B — Chạy rolling update:**
+
+```bash
+ansible-playbook playbooks/rolling_update.yml \
+  -e "webapp_app_version=v2.0" --ask-vault-pass
+```
+
+**3. Ngay sau khi Terminal B hiển thị "[1/5] Drain 8s", chạy Terminal C:**
+
+```bash
+ssh vagrant@192.168.80.141 "sudo docker rm -f flask_app"
+```
+
+**Kết quả đúng ở Terminal B:** Sau 30s (6 lần retry × 5s), playbook kích hoạt auto-rollback:
 
 ```
+FAILED - RETRYING: HTTP GET /health (6 retries left)
+...
+[AUTO-ROLLBACK] Health check FAIL! Rollback node3...
+[ROLLBACK] Stop container lỗi
+[ROLLBACK] Khôi phục webapp từ backup
+[ROLLBACK] Restart Flask container cũ
+[ROLLBACK] Add lại node3 vào LB
+[ROLLBACK] Reload LB sau rollback
+
 FAILED! => ❌ node3 FAIL! Da tu dong rollback.
            Kiem tra log: docker logs flask_app
 ```
 
+**Kết quả đúng ở Terminal A:** Không có lỗi nào trong suốt quá trình. LB đã tự chuyển traffic sang node1 khi node3 bị lỗi và trở lại bình thường sau rollback.
+
+**4. Xác nhận hệ thống ổn định sau rollback:**
+
+```bash
+ansible-playbook playbooks/healthcheck.yml --ask-vault-pass
+```
+
+**Kết quả đúng:** Tất cả `OK`. node3 đang chạy lại phiên bản trước đó.
+
 ---
 
-## PHẦN 7: Rollback về v1.0
+## Bước 11 — Rollback toàn bộ về v1.0
+
+**Mục đích:** Đưa toàn bộ hệ thống trở về phiên bản ổn định ban đầu.
 
 ```bash
 ansible-playbook playbooks/rolling_update.yml \
-  -e "webapp_app_version=v1.0"
+  -e "webapp_app_version=v1.0" --ask-vault-pass
 ```
+
+**Kết quả đúng:** Cả node1 và node3 đều về v1.0. Trình duyệt hiển thị badge **xanh dương (v1.0)**.
 
 ---
 
-## Tổng hợp các lệnh thường dùng
+## Tổng hợp kết quả kiểm thử
 
-```bash
-# Deploy toàn bộ
-ansible-playbook playbooks/site.yml
-
-# Health check
-ansible-playbook playbooks/healthcheck.yml
-
-# Rolling update lên v2.0
-ansible-playbook playbooks/rolling_update.yml -e "webapp_app_version=v2.0"
-
-# Rollback về v1.0
-ansible-playbook playbooks/rolling_update.yml -e "webapp_app_version=v1.0"
-
-# Backup thủ công
-ansible-playbook playbooks/backup.yml
-
-# Chỉ deploy Flask (không build lại image)
-ansible-playbook playbooks/site.yml --tags webapp
-
-# Chỉ reload Nginx LB
-ansible-playbook playbooks/site.yml --tags nginx
-```
-
----
-
-## Xử lý lỗi thường gặp
-
-**Lỗi: `node3 unreachable`**
-```bash
-# Kiểm tra SSH
-ssh vagrant@192.168.80.141
-# Kiểm tra IP đúng chưa
-ansible node3 -m setup -a "filter=ansible_default_ipv4"
-```
-
-**Lỗi: `community.docker not found`**
-```bash
-ansible-galaxy collection install -r requirements.yml --force
-```
-
-**Lỗi: `Nginx LB KHONG chay` khi chạy rolling_update.yml**
-```bash
-# Deploy lại nginx trước
-ansible-playbook playbooks/site.yml --tags nginx
-```
-
-**Lỗi: MySQL connection refused từ Flask**
-```bash
-# Kiểm tra MySQL container
-ansible node2 -m shell -a "docker ps | grep mysql"
-# Kiểm tra port 3306
-ansible node2 -m wait_for -a "host=127.0.0.1 port=3306 timeout=10"
-```
+| # | Tính năng | Lệnh chính | Kết quả mong đợi |
+|---|-----------|-----------|-----------------|
+| 1 | Dependencies | `ansible-galaxy install` | All installed |
+| 2 | Kết nối nodes | `ansible all -m ping` | 3 nodes pong |
+| 3 | Dynamic Inventory | `dynamic_inventory.py --list` | JSON đúng group |
+| 4 | Deploy lần đầu | `site.yml` | Web hoạt động |
+| 5 | Load Balancer | `curl /health` × 8 | node1/node3 luân phiên |
+| 6 | Tags & Dry-run | `--tags webapp --check` | Không thay đổi thật |
+| 7 | Backup | `backup.yml` | File .tar.gz + .sql.gz |
+| 8 | Health Check | `healthcheck.yml` | Phát hiện FAIL chính xác |
+| 9 | Rolling Update | `rolling_update.yml` | Zero-downtime, v2.0 OK |
+| 10 | Auto-Rollback | Phá Flask mid-deploy | Tự rollback, LB ổn định |
+| 11 | Rollback v1.0 | `rolling_update.yml -e v1.0` | Hệ thống về v1.0 |

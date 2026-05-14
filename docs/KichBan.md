@@ -10,58 +10,67 @@ ansible-galaxy collection install -r requirements.yml
 
 ---
 
-# Bước 2 — Mã hóa Secrets với Ansible Vault
+## Bước 2: Tạo và mã hóa file secrets
 
-## 2.1 — Tạo file secrets
+### Tạo file secrets:
 
 ```bash
 cat > vault/secrets.yml << EOF
-db_root_password: "root123"
-db_name: "ansible_db"
-db_user: "ansible_user"
-db_password: "password123"
+vault_mysql_root_password: "Root@1234"
+vault_mysql_password: "Wp@1234"
 EOF
 ```
 
 ---
 
-## 2.2 — Xem file trước khi mã hóa
-
-```bash
-cat vault/secrets.yml
-```
-
----
-
-## 2.3 — Mã hóa file
+### Mã hóa file:
 
 ```bash
 ansible-vault encrypt vault/secrets.yml
 ```
 
-Password:
+Nhập password khi được yêu cầu:
+
 ```text
-vagrant
+@Hao1712
 ```
 
 ---
 
-## 2.4 — Kiểm tra sau mã hóa
+### Cấu hình tự động giải mã khi được yêu cầu nhập password các lệnh cần quyền quản trị:
+
+```bash
+echo "@Hao1712" > ~/.vault_pass
+chmod 600 ~/.vault_pass
+```
+
+---
+
+# Kết quả
+
+### Hiển thị file mã hóa:
 
 ```bash
 cat vault/secrets.yml
 ```
 
----
-
-## 2.5 — Lưu vault password
-
-```bash
-echo "vagrant" > vault/.vault_pass
-chmod 600 vault/.vault_pass
+```text
+$ANSIBLE_VAULT;1.1;AES256
+(dạng mã hóa)
 ```
 
 ---
+
+### Chạy Ansible không cần nhập password:
+
+```bash
+ansible-vault view vault/secrets.yml
+```
+
+```yaml
+vault_mysql_root_password: "Root@1234"
+vault_mysql_password: "Wp@1234"
+```
 
 # Bước 3 — Deploy hệ thống
 

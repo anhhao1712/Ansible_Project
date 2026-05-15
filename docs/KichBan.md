@@ -151,6 +151,14 @@ ansible-playbook playbooks/rollback.yml
 
 ---
 
+# Bước 7 — Bảo mật
+
+```bash
+ssh vagrant@192.168.80.139 "sudo docker exec webserver sh -c 'echo hacker > /etc/nginx/conf.d/default.conf'"
+```
+
+---
+
 ## 6.4 — Kiểm tra lại
 
 ```bash

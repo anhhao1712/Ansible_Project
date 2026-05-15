@@ -83,6 +83,10 @@ ansible-playbook playbooks/site.yml
 # Bước 4 — Test Tags & Dry-run
 
 ```bash
+ssh vagrant@192.168.80.139 "sudo docker stop flask_app"
+```
+
+```bash
 ansible-playbook playbooks/site.yml --tags webapp --check
 ```
 
@@ -113,7 +117,20 @@ ssh vagrant@192.168.80.140 "sudo ls -la /opt/backups/mysql/"
 ## 6.1 — Tắt Flask Container
 
 ```bash
-ssh vagrant@192.168.80.139 "sudo docker stop flask_app"
+ssh vagrant@192.168.80.139 'cat << "EOF" > /tmp/hacked_app.py
+from flask import Flask
+app = Flask(__name__)
+
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def hack(path):
+    return "<h1 style=\"color:red;font-size:100px;text-align:center;margin-top:20%;\">HỆ THỐNG ĐÃ BỊ HACK</h1>"
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
+EOF
+sudo docker cp /tmp/hacked_app.py flask_app:/app/app.py
+sudo docker restart flask_app'
 ```
 
 ---

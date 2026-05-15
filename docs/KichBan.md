@@ -87,7 +87,7 @@ ssh vagrant@192.168.80.139 "sudo docker stop flask_app"
 ```
 
 ```bash
-ansible-playbook playbooks/site.yml --tags webapp --check
+ansible-playbook playbooks/site.yml --tags webapp
 ```
 
 ---
